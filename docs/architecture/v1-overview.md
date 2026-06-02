@@ -251,6 +251,7 @@ Day 1   Robin opens GHL, sees the booking
 | LinkedIn Adapter | Unipile API | Production-grade, predictable, doesn't lock us in |
 | AI Brain | TypeScript + Claude API | TS strict mode (per Felix's preference), Claude 4.7 for the heaviest reasoning, Haiku for cheap routing decisions |
 | Operational DB | Supabase (Postgres) | Free tier covers v1, scales, structured queries free |
+| Webhook receiver | TypeScript backend, direct HTTP endpoints (no n8n) | Typeform / GHL / Unipile post directly — one fewer system to host and monitor |
 | GHL Sync | TypeScript worker, GHL REST API + webhooks | Direct integration, no third-party glue |
 | Admin view (transcript reader) | Small Next.js page, Supabase auth for Robin | Robin clicks from GHL into transcript, ~1 week of build |
 | Hosting | Vercel (admin) + Railway/Fly.io (worker + adapter) | Cheap, fast deploys |
@@ -301,6 +302,7 @@ Still open (as of 2026-06-02):
 | Lead-magnet quiz on Typeform with webhook | Confirmed | 2026-05-18 |
 | Application on Typeform with webhook | Confirmed | 2026-05-18 |
 | DNC for existing customers | GHL Smart-List query before every cold-outbound | 2026-05-18 |
+| n8n in stack? | Dropped — direct webhook endpoints on our TypeScript backend instead (one less hosted system, one less point of failure). n8n can be added later if Robin or Felix want self-service workflows. | 2026-06-02 |
 | Project kickoff (build start) | 2026-06-02 | 2026-06-02 |
 | GHL workspace (existing vs. new sub-account) | Pending | — |
 | Volume target | Pending — asked in DM 2026-06-02 | — |

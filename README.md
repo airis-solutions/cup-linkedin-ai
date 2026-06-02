@@ -20,8 +20,7 @@ Build started **2026-06-02**. Currently scaffolding integrations — see `docs/a
 - **DB:** Supabase (Postgres) — AI working memory
 - **LinkedIn channel:** Unipile
 - **CRM (Robin's view):** GoHighLevel — Supabase syncs one-way → GHL
-- **Forms:** Typeform (lead-magnet quiz + application) via webhooks
-- **Webhook hub:** n8n
+- **Forms:** Typeform (lead-magnet quiz + application) via direct webhooks to our backend
 - **Hosting:** Railway / Vercel
 
 ## Local setup

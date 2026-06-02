@@ -25,8 +25,8 @@ const envSchema = z.object({
   TYPEFORM_FORM_ID_LEAD_MAGNET: z.string().optional(),
   TYPEFORM_FORM_ID_APPLICATION: z.string().optional(),
 
-  N8N_BASE_URL: z.string().url().optional(),
-  N8N_WEBHOOK_SECRET: z.string().optional(),
+  WEBHOOK_BASE_URL: z.string().url().optional(),
+  WEBHOOK_SHARED_SECRET: z.string().optional(),
 
   LINKEDIN_DMS_PER_DAY_LIMIT: z.coerce.number().int().positive().default(30),
   LINKEDIN_RANDOMIZATION_MIN_MS: z.coerce.number().int().nonnegative().default(45000),
