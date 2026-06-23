@@ -44,7 +44,10 @@ let cachedEnv: Env | null = null;
 export function loadEnv(): Env {
   if (cachedEnv) return cachedEnv;
 
-  const parsed = envSchema.safeParse(process.env);
+  // Treat empty-string env vars (e.g. `WEBHOOK_BASE_URL=` in .env) as unset, so optional
+  // fields don't fail validation.
+  const cleaned = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== ''));
+  const parsed = envSchema.safeParse(cleaned);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join('.')}: ${i.message}`)

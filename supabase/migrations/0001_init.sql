@@ -56,7 +56,11 @@ create table leads (
   id uuid primary key default gen_random_uuid(),
   linkedin_url text unique,
   linkedin_provider_id text,
+  unipile_chat_id text,
   full_name text,
+  first_name text,
+  email text,
+  phone text,
   headline text,
   company text,
   source lead_source not null,
@@ -64,11 +68,13 @@ create table leads (
   ghl_contact_id text unique,
   do_not_contact boolean not null default false,
   do_not_contact_reason text,
+  brain jsonb not null default '{}'::jsonb,
   qualification jsonb not null default '{}'::jsonb,
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+create index idx_leads_provider on leads(linkedin_provider_id);
 
 create index idx_leads_stage on leads(stage);
 create index idx_leads_source on leads(source);
@@ -94,10 +100,13 @@ create index idx_conv_next_action on conversations(next_action_at) where next_ac
 -- ─── Messages ────────────────────────────────────────────────────
 create table messages (
   id uuid primary key default gen_random_uuid(),
-  conversation_id uuid not null references conversations(id) on delete cascade,
+  lead_id uuid references leads(id) on delete cascade,
+  conversation_id uuid references conversations(id) on delete cascade,
   direction message_direction not null,
   status message_status not null,
   body text not null,
+  node text,
+  guard_flagged boolean not null default false,
   template_id text,
   variant text,
   unipile_message_id text unique,
@@ -109,6 +118,7 @@ create table messages (
 );
 
 create index idx_msg_conv on messages(conversation_id, created_at desc);
+create index idx_msg_lead on messages(lead_id, created_at desc);
 create index idx_msg_status on messages(status) where status in ('pending_hitl', 'approved');
 
 -- ─── Events (audit log) ──────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { loadEnv } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { classifyInbound } from './brain/classify.js';
-import { InMemoryRepository } from './store/memory.js';
+import { createSupabaseRepoFromEnv } from './store/supabase.js';
 import { createUnipileFromEnv } from './channel/index.js';
 import { startServer, type AppDeps } from './server.js';
 import type { LeadRecord } from './store/repository.js';
@@ -24,9 +24,8 @@ async function main(): Promise<void> {
     'cgp-linkedin-ai starting',
   );
 
-  // TODO: swap InMemoryRepository for the Supabase repository before production.
   const deps: AppDeps = {
-    repo: new InMemoryRepository(),
+    repo: createSupabaseRepoFromEnv(),
     classify: classifyInbound,
     hitlRequired: env.HITL_REQUIRED_BEFORE_SEND,
     vars: (lead: LeadRecord) => ({
