@@ -24,6 +24,10 @@ export type EventKind = BrainEventKind | 'lead_created' | 'reply_received' | 'op
 export interface LeadRecord {
   id: string;
   linkedinUrl?: string;
+  /** LinkedIn provider id (the attendee id Unipile uses to address this person). */
+  linkedinProviderId?: string;
+  /** Unipile chat id for the ongoing conversation (where replies are sent). */
+  unipileChatId?: string;
   fullName?: string;
   firstName?: string;
   /** Contact details collected in-chat before booking. */
@@ -62,6 +66,8 @@ export interface EventRecord {
 export interface CreateLeadInput {
   source: LeadSource;
   linkedinUrl?: string;
+  linkedinProviderId?: string;
+  unipileChatId?: string;
   fullName?: string;
   firstName?: string;
 }
@@ -69,6 +75,8 @@ export interface CreateLeadInput {
 export interface Repository {
   getLead(id: string): Promise<LeadRecord | null>;
   findLeadByLinkedinUrl(url: string): Promise<LeadRecord | null>;
+  /** Find a lead by their LinkedIn provider id (used to map inbound webhooks). */
+  findLeadByProviderId(providerId: string): Promise<LeadRecord | null>;
   createLead(input: CreateLeadInput): Promise<LeadRecord>;
   /** Persist brain state, stage, qualification, do-not-contact. */
   saveLead(lead: LeadRecord): Promise<void>;
@@ -79,6 +87,8 @@ export interface Repository {
   /** Messages awaiting a human approve/reject before send. */
   pendingApprovals(): Promise<MessageRecord[]>;
   messagesForLead(leadId: string): Promise<MessageRecord[]>;
+  /** Update an outbound message's status (e.g. approved -> sent). */
+  setMessageStatus(messageId: string, status: MessageStatus): Promise<void>;
 }
 
 export function emptyQualification(): Qualification {

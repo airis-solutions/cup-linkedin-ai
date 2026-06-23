@@ -30,11 +30,20 @@ export class InMemoryRepository implements Repository {
     return null;
   }
 
+  async findLeadByProviderId(providerId: string): Promise<LeadRecord | null> {
+    for (const lead of this.leads.values()) {
+      if (lead.linkedinProviderId === providerId) return lead;
+    }
+    return null;
+  }
+
   async createLead(input: CreateLeadInput): Promise<LeadRecord> {
     const now = new Date().toISOString();
     const lead: LeadRecord = {
       id: randomUUID(),
       linkedinUrl: input.linkedinUrl,
+      linkedinProviderId: input.linkedinProviderId,
+      unipileChatId: input.unipileChatId,
       fullName: input.fullName,
       firstName: input.firstName,
       source: input.source,
@@ -72,6 +81,11 @@ export class InMemoryRepository implements Repository {
 
   async messagesForLead(leadId: string): Promise<MessageRecord[]> {
     return this.messages.filter((m) => m.leadId === leadId);
+  }
+
+  async setMessageStatus(messageId: string, status: MessageRecord['status']): Promise<void> {
+    const msg = this.messages.find((m) => m.id === messageId);
+    if (msg) msg.status = status;
   }
 
   /** Test helper: all recorded events. */
