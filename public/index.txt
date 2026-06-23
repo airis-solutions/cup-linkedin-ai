@@ -1,0 +1,1 @@
+CGP LinkedIn AI — serverless API. See /api endpoints.
