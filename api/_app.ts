@@ -33,12 +33,18 @@ function deps(): AppDeps {
 
 /** Adapt a Vercel (req,res) to the shared pure router for the given canonical path. */
 export async function handle(req: VercelRequest, res: VercelResponse, path: string): Promise<void> {
-  const body = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
-  const result = await route(deps(), {
-    method: req.method ?? 'GET',
-    path,
-    body,
-    headers: req.headers as Record<string, string | undefined>,
-  });
-  res.status(result.status).json(result.json);
+  try {
+    const body = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+    const result = await route(deps(), {
+      method: req.method ?? 'GET',
+      path,
+      body,
+      headers: req.headers as Record<string, string | undefined>,
+    });
+    res.status(result.status).json(result.json);
+  } catch (err) {
+    // Surface the real reason (e.g. missing env var) instead of an opaque 500.
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
 }
