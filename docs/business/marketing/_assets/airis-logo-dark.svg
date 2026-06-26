@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 120" width="540" height="120">
+  <!-- AIRIS Hauptlogo - Variante für dunklen Hintergrund -->
+  <g>
+    <circle cx="30" cy="60" r="9" fill="none" stroke="#F5F2ED" stroke-width="4"/>
+    <line x1="42" y1="60" x2="54" y2="60" stroke="#F5F2ED" stroke-width="3"/>
+    <circle cx="66" cy="60" r="9" fill="#0ea5e9"/>
+    <line x1="78" y1="60" x2="90" y2="60" stroke="#F5F2ED" stroke-width="3"/>
+    <circle cx="102" cy="60" r="9" fill="#F5F2ED"/>
+  </g>
+  <text x="140" y="84" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="72" letter-spacing="4">
+    <tspan fill="#F5F2ED">AIR</tspan><tspan fill="#0ea5e9">I</tspan><tspan fill="#F5F2ED">S</tspan>
+  </text>
+</svg>

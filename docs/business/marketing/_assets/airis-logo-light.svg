@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 120" width="540" height="120">
+  <!-- AIRIS Hauptlogo: Pipeline-Symbol-Prefix + Sky-Blue zweites I -->
+  <!-- Pipeline-Symbol (Logomark als Prefix) -->
+  <g>
+    <circle cx="30" cy="60" r="9" fill="none" stroke="#0A0A0A" stroke-width="4"/>
+    <line x1="42" y1="60" x2="54" y2="60" stroke="#0A0A0A" stroke-width="3"/>
+    <circle cx="66" cy="60" r="9" fill="#0ea5e9"/>
+    <line x1="78" y1="60" x2="90" y2="60" stroke="#0A0A0A" stroke-width="3"/>
+    <circle cx="102" cy="60" r="9" fill="#0A0A0A"/>
+  </g>
+  <text x="140" y="84" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="72" letter-spacing="4">
+    <tspan fill="#0A0A0A">AIR</tspan><tspan fill="#0ea5e9">I</tspan><tspan fill="#0A0A0A">S</tspan>
+  </text>
+</svg>
