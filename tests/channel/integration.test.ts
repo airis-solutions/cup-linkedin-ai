@@ -73,6 +73,23 @@ describe('inbound webhook → AI → reply via Unipile', () => {
     const next = await handleInbound(deps, lead!.id, 'yeah lets do it');
     expect(next.node).toBe('q1');
   });
+
+  it('ignores the account owner\'s own messages echoed back by Unipile', async () => {
+    const repo = new InMemoryRepository();
+    const deps = makeDeps(repo);
+
+    const turn = await handleUnipileWebhook(deps, {
+      account_id: 'ACC',
+      chat_id: 'chatX',
+      account_info: { user_id: 'robin_self' },
+      sender: { attendee_provider_id: 'robin_self' },
+      message: 'a reply Robin just sent',
+    });
+
+    expect(turn).toBeNull();
+    expect(await repo.findLeadByProviderId('robin_self')).toBeNull();
+    expect((await repo.pendingApprovals()).length).toBe(0);
+  });
 });
 
 describe('cold opener → starts a new chat', () => {

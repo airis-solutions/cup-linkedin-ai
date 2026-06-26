@@ -90,6 +90,11 @@ export class UnipileClient {
 export interface UnipileInboundWebhook {
   account_id: string;
   chat_id: string;
+  /** The connected account owner. Unipile delivers the owner's OWN sent messages too, so
+   * we compare this against `sender` to drop them (otherwise the AI replies to itself). */
+  account_info?: { user_id?: string };
+  /** 1/true when the linked account itself is the sender of this message. */
+  is_sender?: boolean | number | string;
   /** Sender's LinkedIn provider id. */
   sender?: { attendee_provider_id?: string; attendee_id?: string };
   message?: string;
@@ -97,13 +102,23 @@ export interface UnipileInboundWebhook {
 }
 
 /** Normalise a webhook payload to the bits the orchestrator needs. */
-export function parseInbound(
-  payload: UnipileInboundWebhook,
-): { accountId: string; chatId: string; senderId?: string; text: string } {
+export function parseInbound(payload: UnipileInboundWebhook): {
+  accountId: string;
+  chatId: string;
+  senderId?: string;
+  text: string;
+  /** True when Robin's own account sent this message — Unipile echoes those back. */
+  fromSelf: boolean;
+} {
+  const senderId = payload.sender?.attendee_provider_id ?? payload.sender?.attendee_id;
+  const ownerId = payload.account_info?.user_id;
+  const isSenderFlag = payload.is_sender === true || payload.is_sender === 1 || payload.is_sender === '1';
+  const fromSelf = isSenderFlag || (ownerId != null && senderId != null && ownerId === senderId);
   return {
     accountId: payload.account_id,
     chatId: payload.chat_id,
-    senderId: payload.sender?.attendee_provider_id ?? payload.sender?.attendee_id,
+    senderId,
     text: payload.message ?? payload.text ?? '',
+    fromSelf,
   };
 }

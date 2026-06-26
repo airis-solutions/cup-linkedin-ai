@@ -55,13 +55,36 @@ describe('UnipileClient.startChat', () => {
 });
 
 describe('parseInbound', () => {
-  it('normalises a webhook payload', () => {
+  it('normalises a webhook payload from a real prospect', () => {
     const r = parseInbound({
       account_id: 'ACC1',
       chat_id: 'c7',
+      account_info: { user_id: 'robin_self' },
       sender: { attendee_provider_id: 'lnkd_55' },
       message: 'yeah sure',
     });
-    expect(r).toEqual({ accountId: 'ACC1', chatId: 'c7', senderId: 'lnkd_55', text: 'yeah sure' });
+    expect(r).toEqual({ accountId: 'ACC1', chatId: 'c7', senderId: 'lnkd_55', text: 'yeah sure', fromSelf: false });
+  });
+
+  it('flags the account owner\'s own echoed messages via is_sender', () => {
+    const r = parseInbound({
+      account_id: 'ACC1',
+      chat_id: 'c7',
+      is_sender: 1,
+      sender: { attendee_provider_id: 'robin_self' },
+      message: 'a message Robin sent',
+    });
+    expect(r.fromSelf).toBe(true);
+  });
+
+  it('flags self when account owner id equals the sender id', () => {
+    const r = parseInbound({
+      account_id: 'ACC1',
+      chat_id: 'c7',
+      account_info: { user_id: 'robin_self' },
+      sender: { attendee_provider_id: 'robin_self' },
+      message: 'echoed back',
+    });
+    expect(r.fromSelf).toBe(true);
   });
 });

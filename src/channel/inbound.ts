@@ -13,8 +13,10 @@ export async function handleUnipileWebhook(
   deps: OrchestratorDeps,
   payload: UnipileInboundWebhook,
 ): Promise<TurnResult | null> {
-  const { chatId, senderId, text } = parseInbound(payload);
-  if (!senderId || !text.trim()) return null;
+  const { chatId, senderId, text, fromSelf } = parseInbound(payload);
+  // Unipile echoes the account owner's OWN sent messages back as message_received —
+  // ignore them, otherwise the AI keeps replying to itself.
+  if (fromSelf || !senderId || !text.trim()) return null;
 
   let lead = await deps.repo.findLeadByProviderId(senderId);
   if (!lead) {
