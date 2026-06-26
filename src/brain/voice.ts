@@ -49,14 +49,19 @@ function transcript(history: GenerateTurn[]): string {
 
 function instruction(p: GenerateParams, avoid?: string): string {
   const lang = p.language === 'de' ? 'German (informal "du")' : 'English';
+  const askedAboutCgp = p.intent === 'content_question';
   return [
     `Conversation so far:\n${transcript(p.history)}`,
     p.inbound ? `\nTheir latest message: "${p.inbound}"` : '',
-    `\nWrite your next reply as Robin, in ${lang}.`,
-    `It must carry the SAME meaning and the SAME single question or call-to-action as this approved version:`,
+    `\nReply as Robin, in ${lang} — a real person texting on LinkedIn, not a script. Sound human and relaxed, and genuinely respond to what they just said.`,
+    askedAboutCgp
+      ? `They asked a real question about CGP. Answer it honestly first, in one or two plain sentences from what you actually know (no invented numbers, deep detail belongs on the call). Don't dodge it.`
+      : '',
+    `Where you're steering this conversation right now (your intent for this reply, NOT a line to recite):`,
     `"""${p.canonical}"""`,
-    `Say it naturally in your own voice — do not copy it word for word, but keep its intent, its one question, and any URL exactly as written.`,
-    `Keep it short (LinkedIn DM). Mix register at least once. No emoji, no em dashes, no exclamation marks.`,
+    `Move toward that the way a person naturally would. Usually that means asking the one thing you still want to know, or nudging toward a call — but you don't have to fire it as a stiff question every message. Being conversational and flexible is good. Keep any URL exactly as written.`,
+    `Your north star is getting them on a call with you. The things worth knowing (their crypto experience, what they want to improve and why, their capital level) you gather naturally as it comes up, never as an interrogation. Qualifying can keep happening loosely, even around the call, so never let it make you sound like a form.`,
+    `Keep it short (a line or two). Mix one formal and one casual beat. No emoji, no em dashes, no exclamation marks.`,
     avoid ? `\nYour previous attempt broke a rule. Avoid: ${avoid}. Rewrite cleanly.` : '',
     `\nOutput only the message text, nothing else.`,
   ]
