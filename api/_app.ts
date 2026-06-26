@@ -3,6 +3,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { route, type AppDeps } from '../src/server.js';
 import { classifyInbound } from '../src/brain/classify.js';
+import { generateReply } from '../src/brain/voice.js';
 import { createSupabaseRepoFromEnv } from '../src/store/supabase.js';
 import { createUnipileFromEnv } from '../src/channel/index.js';
 import { loadEnv } from '../src/config/env.js';
@@ -19,6 +20,7 @@ function deps(): AppDeps {
   cached = {
     repo: createSupabaseRepoFromEnv(),
     classify: classifyInbound,
+    generate: generateReply,
     hitlRequired: env.HITL_REQUIRED_BEFORE_SEND,
     vars: (lead: LeadRecord) => ({
       firstName: lead.firstName ?? 'there',

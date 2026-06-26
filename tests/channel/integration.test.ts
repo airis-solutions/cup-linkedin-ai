@@ -1,5 +1,5 @@
 import { InMemoryRepository } from '../../src/store/memory.js';
-import { handleOpener, type OrchestratorDeps } from '../../src/orchestrator.js';
+import { handleOpener, handleInbound, type OrchestratorDeps } from '../../src/orchestrator.js';
 import { handleUnipileWebhook, approveMessage, dispatchApprovedForLead } from '../../src/channel/index.js';
 import type { UnipileClient } from '../../src/channel/index.js';
 import type { FlowNode, InboundUnderstanding, LeadRecord } from '../../src/brain/types.js';
@@ -15,7 +15,13 @@ const SCRIPT: Partial<Record<FlowNode, InboundUnderstanding>> = {
 };
 
 function makeDeps(repo: InMemoryRepository): OrchestratorDeps {
-  return { repo, hitlRequired: true, vars: VARS, classify: async ({ node }) => SCRIPT[node] ?? { intent: 'other' } };
+  return {
+    repo,
+    hitlRequired: true,
+    vars: VARS,
+    classify: async ({ node }) => SCRIPT[node] ?? { intent: 'other' },
+    generate: async ({ canonical }) => canonical,
+  };
 }
 
 function fakeUnipile() {
@@ -45,7 +51,8 @@ describe('inbound webhook → AI → reply via Unipile', () => {
       message: 'yes sure',
     });
 
-    expect(turn?.node).toBe('q1');
+    // Welcome-first: a lead who DMs cold gets the warm opener before the screen.
+    expect(turn?.node).toBe('welcome');
     const lead = await repo.findLeadByProviderId('p1');
     expect(lead?.unipileChatId).toBe('chatX');
 
@@ -59,8 +66,12 @@ describe('inbound webhook → AI → reply via Unipile', () => {
 
     expect(res.sent).toBe(1);
     expect(uni.calls.send[0].chatId).toBe('chatX');
-    expect(uni.calls.send[0].text).toContain('how long have you been investing');
+    expect(uni.calls.send[0].text).toContain('happy to share more on CGP');
     expect((await repo.messagesForLead(lead!.id)).find((m) => m.direction === 'outbound')?.status).toBe('sent');
+
+    // Their next reply advances into the qualification screen.
+    const next = await handleInbound(deps, lead!.id, 'yeah lets do it');
+    expect(next.node).toBe('q1');
   });
 });
 

@@ -29,6 +29,7 @@ function makeDeps(repo: InMemoryRepository, unipile: UnipileClient | null, webho
       walkthroughLink: 'https://crypto-gameplan.com',
     }),
     classify: async ({ node }) => SCRIPT[node] ?? { intent: 'other' },
+    generate: async ({ canonical }) => canonical,
   };
 }
 

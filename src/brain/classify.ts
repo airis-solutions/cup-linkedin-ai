@@ -34,6 +34,7 @@ const ResponseSchema = z.object({
     'content_question',
     'other',
   ]),
+  language: z.enum(['de', 'en']).optional(),
   readback: z.string().max(160).optional(),
   experienceLevel: z.enum(EXPERIENCE_LEVELS).optional(),
   biggestChallenge: z.string().max(400).optional(),
@@ -66,11 +67,13 @@ function systemPrompt(node: FlowNode, priorAnswer?: string): string {
     NODE_TASK[node] ?? 'Classify the intent of their reply.',
     priorAnswer ? `Their previous answer (for the read-back): "${priorAnswer}"` : '',
     '',
+    'Also detect "language": "de" if they wrote in German, otherwise "en".',
+    '',
     'Also produce "readback": a SHORT acknowledgement of what they just said, in Robin\'s voice.',
     'Read-back rules: under 14 words. Acknowledge, never evaluate (no "great", "awesome", "perfect"). No emoji. No em dashes. No "I\'d love to". Sound human, mix one casual + one precise beat. Example: "Alright got it, 2 years since you started looking into crypto."',
     '',
     'Return exactly this JSON shape (omit fields you cannot determine):',
-    '{"intent": "...", "readback": "...", "experienceLevel": "...", "biggestChallenge": "...", "desiredOutcome": "...", "portfolioValue": "...", "holdsAssets": true, "notes": "..."}',
+    '{"intent": "...", "language": "de|en", "readback": "...", "experienceLevel": "...", "biggestChallenge": "...", "desiredOutcome": "...", "portfolioValue": "...", "holdsAssets": true, "notes": "..."}',
   ]
     .filter(Boolean)
     .join('\n');
@@ -144,6 +147,7 @@ export async function classifyInbound(params: ClassifyParams): Promise<InboundUn
 
   return {
     intent: d.intent,
+    language: d.language,
     readback: d.readback,
     extracted: Object.keys(extracted).length ? extracted : undefined,
     contact,

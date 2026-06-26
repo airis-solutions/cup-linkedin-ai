@@ -2,18 +2,19 @@ import Anthropic from '@anthropic-ai/sdk';
 import { loadEnv } from '../config/env.js';
 import { logger } from './logger.js';
 
-const env = loadEnv();
+export type ClaudeRole = 'brain' | 'router';
 
-export const anthropic = new Anthropic({
-  apiKey: env.ANTHROPIC_API_KEY,
-});
+// Lazy so importing this module is side-effect free (no env required until a call is made).
+let _client: Anthropic | undefined;
+function client(): Anthropic {
+  if (!_client) _client = new Anthropic({ apiKey: loadEnv().ANTHROPIC_API_KEY });
+  return _client;
+}
 
-export const ClaudeModels = {
-  brain: env.CLAUDE_BRAIN_MODEL,
-  router: env.CLAUDE_ROUTER_MODEL,
-} as const;
-
-export type ClaudeRole = keyof typeof ClaudeModels;
+function modelFor(role: ClaudeRole): string {
+  const env = loadEnv();
+  return role === 'brain' ? env.CLAUDE_BRAIN_MODEL : env.CLAUDE_ROUTER_MODEL;
+}
 
 type CacheableSystemBlock = {
   type: 'text';
@@ -31,16 +32,17 @@ export interface ClaudeCallParams {
 }
 
 export async function callClaude(params: ClaudeCallParams): Promise<Anthropic.Message> {
-  const { role, system, messages, maxTokens = 1024, temperature = 0.7, metadata } = params;
+  const { role, system, messages, maxTokens = 1024, temperature, metadata } = params;
 
-  const model = ClaudeModels[role];
+  const model = modelFor(role);
 
   logger.debug({ role, model, msg_count: messages.length, metadata }, 'claude.call');
 
-  const response = await anthropic.messages.create({
+  const response = await client().messages.create({
     model,
     max_tokens: maxTokens,
-    temperature,
+    // Some newer models (e.g. Opus 4.7) reject an explicit temperature — only send it when set.
+    ...(temperature !== undefined ? { temperature } : {}),
     system: system as Anthropic.MessageCreateParams['system'],
     messages,
   });

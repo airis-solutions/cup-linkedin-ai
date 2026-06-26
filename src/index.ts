@@ -1,6 +1,7 @@
 import { loadEnv } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { classifyInbound } from './brain/classify.js';
+import { generateReply } from './brain/voice.js';
 import { createSupabaseRepoFromEnv } from './store/supabase.js';
 import { createUnipileFromEnv } from './channel/index.js';
 import { startServer, type AppDeps } from './server.js';
@@ -27,6 +28,7 @@ async function main(): Promise<void> {
   const deps: AppDeps = {
     repo: createSupabaseRepoFromEnv(),
     classify: classifyInbound,
+    generate: generateReply,
     hitlRequired: env.HITL_REQUIRED_BEFORE_SEND,
     vars: (lead: LeadRecord) => ({
       firstName: lead.firstName ?? 'there',

@@ -25,6 +25,8 @@ function makeDeps(repo: InMemoryRepository, hitlRequired = true): OrchestratorDe
     hitlRequired,
     vars: VARS,
     classify: async ({ node }) => SCRIPT[node] ?? { intent: 'other' },
+    // Identity voice stub: assert the engine's approved line directly, no network.
+    generate: async ({ canonical }) => canonical,
   };
 }
 

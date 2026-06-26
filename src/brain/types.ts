@@ -88,6 +88,9 @@ export type ReplyIntent =
   | 'content_question' // asks something about the shared content/value
   | 'other';
 
+/** Conversation language. Detected from the prospect's inbound; the AI mirrors it. */
+export type Language = 'de' | 'en';
+
 /** Contact details collected in-chat (email captured before booking; phone optional/A-B). */
 export interface ContactDetails {
   email?: string;
@@ -97,6 +100,8 @@ export interface ContactDetails {
 /** Output of the understanding layer (Haiku router). Pure data, no side effects. */
 export interface InboundUnderstanding {
   intent: ReplyIntent;
+  /** Language the prospect wrote in. Drives the reply language. */
+  language?: Language;
   /** Short Robin-voice read-back of their answer (for Q2 / the Q4 vocab swap). */
   readback?: string;
   /** Structured fields extracted from this answer, if any. */
@@ -114,6 +119,11 @@ export interface BrainState {
   valueTouchCount: number;
   hesitantExchanges: number;
   objectionPriceCount: number;
+  /** True once the warm opener (welcome) has been sent — so an inbound-first lead gets
+   * the opener before the screen, and a Robin-initiated lead does not get it twice. */
+  openerSent: boolean;
+  /** Sticky conversation language; set from the first inbound, mirrors the prospect. */
+  language?: Language;
 }
 
 /** Variables filled into canonical copy. */
@@ -155,5 +165,6 @@ export function defaultBrainState(): BrainState {
     valueTouchCount: 0,
     hesitantExchanges: 0,
     objectionPriceCount: 0,
+    openerSent: false,
   };
 }
