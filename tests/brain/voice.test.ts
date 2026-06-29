@@ -42,4 +42,28 @@ describe('voice.generateReply', () => {
     );
     expect(out).toBe('Wie lange bist du schon in Krypto unterwegs?');
   });
+
+  const LINK: GenerateParams = {
+    node: 'send_link',
+    canonical: 'Here you go: https://www.crypto-gameplan.com/booking?name=Max\n\nBook any slot that works for you.',
+    language: 'de',
+    firstName: 'Max',
+    history: [],
+  };
+
+  it('falls back to canonical if the model drops the booking URL', async () => {
+    const out = await generateReply(LINK, caller('Hier ist mein Link, buch dir einen Slot.', 'Immer noch ohne Link.'));
+    expect(out).toBe(LINK.canonical);
+  });
+
+  it('keeps a generated message that includes the exact URL', async () => {
+    const good = 'Stark. Hier rein und einen Slot buchen: https://www.crypto-gameplan.com/booking?name=Max';
+    const out = await generateReply(LINK, caller(good));
+    expect(out).toBe(good);
+  });
+
+  it('rejects a bracketed placeholder and falls back to canonical', async () => {
+    const out = await generateReply(LINK, caller('Hier ist dein Link: [Kalender-Link]', 'Nochmal [Kalender-Link]'));
+    expect(out).toBe(LINK.canonical);
+  });
 });
