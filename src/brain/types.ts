@@ -62,6 +62,7 @@ export type FlowNode =
   | 're_engage'
   | 'soft_close_low_capital'
   | 'disqualified'
+  | 'not_prospect'
   | 'booked'
   | 'parked';
 
@@ -86,6 +87,7 @@ export type ReplyIntent =
   | 'not_interested' // firm no / disengage
   | 'questions_vocab' // questions the word "deployed"
   | 'content_question' // asks something about the shared content/value
+  | 'not_a_prospect' // not a potential customer at all (vendor/agency pitch, recruiter, spam)
   | 'other';
 
 /** Conversation language. Detected from the prospect's inbound; the AI mirrors it. */
@@ -140,6 +142,7 @@ export type BrainEventKind =
   | 'booking_link_sent'
   | 'lead_parked'
   | 'lead_disqualified'
+  | 'flagged_non_prospect'
   | 'hitl_requested';
 
 /** The brain's decision for one turn. Pure: no I/O, fully testable. */

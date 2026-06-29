@@ -38,6 +38,8 @@ export const FIXED_COPY: Partial<Record<FlowNode, string>> = {
   soft_close_low_capital:
     "Appreciate you going through those. To be honest: at that capital level, the program's format doesn't fit yet, the structure is built around a different range. I'll send you the free walkthrough instead, which is the better starting point: {walkthrough_link}.",
   disqualified: "CGP isn't the right fit for that situation.",
+  not_prospect:
+    "Appreciate you reaching out, but this isn't something we're looking at on our end. All the best with it.",
 };
 
 /** Q2 reads back the Q1 answer, then asks the locked question. */
@@ -75,6 +77,9 @@ export function nodeToStage(node: FlowNode): FunnelStage {
       return 'booked';
     case 'disqualified':
       return 'disqualified';
+    case 'not_prospect':
+      // Not a customer at all (vendor/spam) — never pursue or follow up.
+      return 'do_not_contact';
     case 'value_touch':
     case 'parked':
     case 'soft_close_low_capital':

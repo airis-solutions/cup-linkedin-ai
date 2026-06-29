@@ -24,6 +24,25 @@ describe('opener', () => {
   });
 });
 
+describe('non-prospect gate', () => {
+  it('flags a vendor/spam pitch instead of qualifying it, from any node', () => {
+    const d = advance(stateAt('welcome'), u('not_a_prospect'), vars);
+    expect(d.nextNode).toBe('not_prospect');
+    expect(d.nextStage).toBe('do_not_contact');
+    expect(d.flagForHuman).toBe(true);
+    expect(d.events).toContain('flagged_non_prospect');
+    // It does NOT extract or advance qualification.
+    expect(d.qualificationPatch).toEqual({});
+    expect(d.reply).toBeTruthy();
+  });
+
+  it('overrides a substantive-looking answer mid-screen', () => {
+    const d = advance(stateAt('q2'), u('not_a_prospect', { extracted: { biggestChallenge: 'x' } }), vars);
+    expect(d.nextNode).toBe('not_prospect');
+    expect(d.qualificationPatch.biggestChallenge).toBeUndefined();
+  });
+});
+
 describe('happy path through the screen', () => {
   it('welcome -> agree -> Q1', () => {
     const d = advance(stateAt('welcome'), u('agree'), vars);

@@ -49,6 +49,22 @@ function transcript(history: GenerateTurn[]): string {
 
 function instruction(p: GenerateParams, avoid?: string): string {
   const lang = p.language === 'de' ? 'German (informal "du")' : 'English';
+
+  // Non-prospect (vendor/agency/recruiter/spam): a brief, final, polite decline — never a
+  // call invite, never a question, never qualification.
+  if (p.node === 'not_prospect') {
+    return [
+      `Conversation so far:\n${transcript(p.history)}`,
+      p.inbound ? `\nTheir latest message: "${p.inbound}"` : '',
+      `\nThis person is NOT a potential customer — they are pitching or spamming you. Reply as Robin in ${lang}: politely and briefly decline, matching the intent of: """${p.canonical}""".`,
+      `One or two lines, warm but final. Do NOT invite them to a call, do NOT ask any question, do NOT try to qualify them. No emoji, no em dashes, no exclamation marks.`,
+      avoid ? `\nYour previous attempt broke a rule. Avoid: ${avoid}. Rewrite cleanly.` : '',
+      `\nOutput only the message text, nothing else.`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
   const askedAboutCgp = p.intent === 'content_question';
   return [
     `Conversation so far:\n${transcript(p.history)}`,

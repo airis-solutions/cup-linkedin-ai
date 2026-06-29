@@ -42,6 +42,17 @@ function toPark(reason: BrainEventKind = 'lead_parked'): BrainDecision {
   return decide('parked', undefined, {}, [reason], { parkUntilHours: 72 });
 }
 
+/**
+ * Not a potential customer at all (vendor/agency pitch, recruiter, spam). Do NOT run them
+ * through qualification — flag for a human, offer a short polite disengage, and route to
+ * do-not-contact so the follow-up scheduler never touches them.
+ */
+function notProspect(vars: FlowVars): BrainDecision {
+  return decide('not_prospect', fill(FIXED_COPY.not_prospect ?? '', vars), {}, ['flagged_non_prospect'], {
+    flagForHuman: true,
+  });
+}
+
 /** First outbound when a lead opens contact / responds to an opener. */
 export function opener(vars: FlowVars): BrainDecision {
   return decide('welcome', fill(FIXED_COPY.welcome ?? '', vars), {}, []);
@@ -54,6 +65,7 @@ export function advance(state: BrainState, u: InboundUnderstanding, vars: FlowVa
   const extracted = u.extracted ?? {};
 
   // Hard exits available from most nodes.
+  if (intent === 'not_a_prospect') return notProspect(vars);
   if (intent === 'not_interested') return toPark();
 
   switch (state.node) {
@@ -177,6 +189,7 @@ export function advance(state: BrainState, u: InboundUnderstanding, vars: FlowVa
 
     case 'disqualified':
     case 'booked':
+    case 'not_prospect':
       return decide(state.node, undefined, {}, []);
   }
 }
@@ -186,6 +199,8 @@ export function advance(state: BrainState, u: InboundUnderstanding, vars: FlowVa
  * Max two value-touches, then parked. After the booking link, a single 72h reminder.
  */
 export function onSilence(state: BrainState, vars: FlowVars): BrainDecision {
+  // Never re-engage someone we flagged as a non-customer.
+  if (state.node === 'not_prospect') return decide(state.node, undefined, {}, []);
   if (state.node === 'send_link') {
     return decide('booking_reminder', fill(FIXED_COPY.booking_reminder ?? '', vars), {}, []);
   }
