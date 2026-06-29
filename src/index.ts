@@ -4,6 +4,7 @@ import { classifyInbound } from './brain/classify.js';
 import { generateReply } from './brain/voice.js';
 import { createSupabaseRepoFromEnv } from './store/supabase.js';
 import { createUnipileFromEnv } from './channel/index.js';
+import { createGhlFromEnv } from './channel/ghl.js';
 import { startServer, type AppDeps } from './server.js';
 import type { LeadRecord } from './store/repository.js';
 
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
       walkthroughLink: WALKTHROUGH_LINK,
     }),
     unipile,
+    ghl: createGhlFromEnv(),
     webhookSecret: env.WEBHOOK_SHARED_SECRET,
   };
 

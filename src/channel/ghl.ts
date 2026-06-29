@@ -90,6 +90,13 @@ export class GhlClient {
     return { ok: true, data: { id, isNew: res.data?.new ?? false } };
   }
 
+  /** Update an existing contact by id (used once we've stored its GHL id). */
+  async updateContact(contactId: string, input: UpsertContactInput): Promise<GhlResult<{ id: string }>> {
+    const res = await this.request<{ contact?: { id?: string } }>('PUT', `/contacts/${contactId}`, input);
+    if (!res.ok) return { ok: false, error: res.error };
+    return { ok: true, data: { id: res.data?.contact?.id ?? contactId } };
+  }
+
   async deleteContact(contactId: string): Promise<GhlResult> {
     return this.request('DELETE', `/contacts/${contactId}`);
   }

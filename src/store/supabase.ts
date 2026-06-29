@@ -36,6 +36,8 @@ function rowToLead(r: Row): LeadRecord {
     brain: r.brain as BrainState,
     qualification: r.qualification as Qualification,
     doNotContact: Boolean(r.do_not_contact),
+    ghlContactId: (r.ghl_contact_id as string) ?? undefined,
+    ghlOpportunityId: (r.ghl_opportunity_id as string) ?? undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -115,6 +117,8 @@ export class SupabaseRepository implements Repository {
         brain: lead.brain,
         qualification: lead.qualification,
         do_not_contact: lead.doNotContact,
+        ghl_contact_id: lead.ghlContactId,
+        ghl_opportunity_id: lead.ghlOpportunityId,
         updated_at: new Date().toISOString(),
       })
       .eq('id', lead.id);

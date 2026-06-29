@@ -14,8 +14,11 @@ import { advance, onSilence, opener } from './brain/engine.js';
 import { scanMessage } from './brain/guard.js';
 import type { ClassifyParams } from './brain/classify.js';
 import type { GenerateReply, GenerateTurn } from './brain/voice.js';
+import type { GhlClient } from './channel/ghl.js';
+import { syncLeadToGhl } from './channel/ghl-sync.js';
 import type { BrainState, FlowVars, InboundUnderstanding, Language, ReplyIntent } from './brain/types.js';
 import type { LeadRecord, MessageRecord, Repository } from './store/repository.js';
+import { logger } from './lib/logger.js';
 
 export interface OrchestratorDeps {
   repo: Repository;
@@ -25,6 +28,8 @@ export interface OrchestratorDeps {
   vars: (lead: LeadRecord) => FlowVars;
   /** When true, outbound messages are stored as pending_hitl and wait for a human approve. */
   hitlRequired: boolean;
+  /** Optional GHL client; when set, leads are synced to the CRM best-effort. */
+  ghl?: GhlClient | null;
 }
 
 export interface TurnResult {
@@ -121,6 +126,17 @@ async function commitDecision(
     await deps.repo.appendEvent({ leadId: lead.id, kind: 'hitl_requested', payload: { reason: 'borderline' } });
   }
   await deps.repo.saveLead(lead);
+
+  // Best-effort one-way CRM sync — a GHL hiccup must never break the conversation.
+  if (deps.ghl) {
+    try {
+      const { changed } = await syncLeadToGhl(deps.ghl, lead);
+      if (changed) await deps.repo.saveLead(lead);
+    } catch (err) {
+      logger.warn({ leadId: lead.id, err }, 'ghl.sync_failed');
+    }
+  }
+
   return draft;
 }
 

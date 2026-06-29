@@ -6,6 +6,7 @@ import { classifyInbound } from '../src/brain/classify.js';
 import { generateReply } from '../src/brain/voice.js';
 import { createSupabaseRepoFromEnv } from '../src/store/supabase.js';
 import { createUnipileFromEnv } from '../src/channel/index.js';
+import { createGhlFromEnv } from '../src/channel/ghl.js';
 import { loadEnv } from '../src/config/env.js';
 import type { LeadRecord } from '../src/store/repository.js';
 
@@ -28,6 +29,7 @@ function deps(): AppDeps {
       walkthroughLink: WALKTHROUGH_LINK,
     }),
     unipile: createUnipileFromEnv(),
+    ghl: createGhlFromEnv(),
     webhookSecret: env.WEBHOOK_SHARED_SECRET,
   };
   return cached;

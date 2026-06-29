@@ -38,6 +38,10 @@ export interface LeadRecord {
   brain: BrainState;
   qualification: Qualification;
   doNotContact: boolean;
+  /** GHL contact id once synced (for idempotent updates). */
+  ghlContactId?: string;
+  /** GHL opportunity id once a qualified lead is in the pipeline. */
+  ghlOpportunityId?: string;
   createdAt: string;
   updatedAt: string;
 }
