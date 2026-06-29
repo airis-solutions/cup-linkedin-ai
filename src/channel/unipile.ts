@@ -95,8 +95,8 @@ export interface UnipileInboundWebhook {
   account_info?: { user_id?: string };
   /** 1/true when the linked account itself is the sender of this message. */
   is_sender?: boolean | number | string;
-  /** Sender's LinkedIn provider id. */
-  sender?: { attendee_provider_id?: string; attendee_id?: string };
+  /** Sender's LinkedIn provider id + display name. */
+  sender?: { attendee_provider_id?: string; attendee_id?: string; attendee_name?: string };
   message?: string;
   text?: string;
 }
@@ -106,6 +106,8 @@ export function parseInbound(payload: UnipileInboundWebhook): {
   accountId: string;
   chatId: string;
   senderId?: string;
+  /** Sender's display name from LinkedIn, e.g. "Felix Schreppel". */
+  senderName?: string;
   text: string;
   /** True when Robin's own account sent this message — Unipile echoes those back. */
   fromSelf: boolean;
@@ -118,7 +120,13 @@ export function parseInbound(payload: UnipileInboundWebhook): {
     accountId: payload.account_id,
     chatId: payload.chat_id,
     senderId,
+    senderName: payload.sender?.attendee_name?.trim() || undefined,
     text: payload.message ?? payload.text ?? '',
     fromSelf,
   };
+}
+
+/** First name from a LinkedIn display name ("Felix Schreppel" -> "Felix"). */
+export function firstNameOf(name: string | undefined): string | undefined {
+  return name?.trim().split(/\s+/)[0] || undefined;
 }

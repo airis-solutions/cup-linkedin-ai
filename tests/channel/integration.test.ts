@@ -47,7 +47,7 @@ describe('inbound webhook → AI → reply via Unipile', () => {
     const turn = await handleUnipileWebhook(deps, {
       account_id: 'ACC',
       chat_id: 'chatX',
-      sender: { attendee_provider_id: 'p1' },
+      sender: { attendee_provider_id: 'p1', attendee_name: 'Max Mustermann' },
       message: 'yes sure',
     });
 
@@ -55,6 +55,8 @@ describe('inbound webhook → AI → reply via Unipile', () => {
     expect(turn?.node).toBe('welcome');
     const lead = await repo.findLeadByProviderId('p1');
     expect(lead?.unipileChatId).toBe('chatX');
+    // The first name is captured from the webhook for booking-link / copy personalisation.
+    expect(lead?.firstName).toBe('Max');
 
     const pending = await repo.pendingApprovals();
     expect(pending.length).toBe(1);

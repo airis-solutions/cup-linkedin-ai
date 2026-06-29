@@ -1,4 +1,4 @@
-import { UnipileClient, parseInbound } from '../../src/channel/unipile.js';
+import { UnipileClient, parseInbound, firstNameOf } from '../../src/channel/unipile.js';
 
 type Captured = { url: string; method?: string; headers?: Record<string, string>; body?: unknown };
 
@@ -55,15 +55,29 @@ describe('UnipileClient.startChat', () => {
 });
 
 describe('parseInbound', () => {
-  it('normalises a webhook payload from a real prospect', () => {
+  it('normalises a webhook payload from a real prospect, including the sender name', () => {
     const r = parseInbound({
       account_id: 'ACC1',
       chat_id: 'c7',
       account_info: { user_id: 'robin_self' },
-      sender: { attendee_provider_id: 'lnkd_55' },
+      sender: { attendee_provider_id: 'lnkd_55', attendee_name: 'Felix Schreppel' },
       message: 'yeah sure',
     });
-    expect(r).toEqual({ accountId: 'ACC1', chatId: 'c7', senderId: 'lnkd_55', text: 'yeah sure', fromSelf: false });
+    expect(r).toEqual({
+      accountId: 'ACC1',
+      chatId: 'c7',
+      senderId: 'lnkd_55',
+      senderName: 'Felix Schreppel',
+      text: 'yeah sure',
+      fromSelf: false,
+    });
+  });
+
+  it('firstNameOf takes the first token (or undefined)', () => {
+    expect(firstNameOf('Felix Schreppel')).toBe('Felix');
+    expect(firstNameOf('  Max  Mustermann ')).toBe('Max');
+    expect(firstNameOf(undefined)).toBeUndefined();
+    expect(firstNameOf('')).toBeUndefined();
   });
 
   it('flags the account owner\'s own echoed messages via is_sender', () => {
