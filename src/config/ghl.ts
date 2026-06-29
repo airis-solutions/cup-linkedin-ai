@@ -12,6 +12,8 @@ import type { FunnelStage, Qualification } from '../brain/types.js';
 
 export const GHL = {
   bookingCalendarId: 'jkGyAjmh7LVrOcyS4mLD',
+  /** Calendar display name in GHL (used as the appointment title). */
+  appointmentTitle: 'Crypto Gameplan - Strategy Session',
   pipelineId: '3BG0f2hSPXf6awJ9I2Wt',
   stages: {
     contacted: '3e269caa-02da-4ffd-81dd-98511a1bbef8',
