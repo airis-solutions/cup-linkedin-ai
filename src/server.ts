@@ -3,6 +3,8 @@
  *
  * - POST /webhooks/unipile  — Unipile delivers an incoming LinkedIn DM here; the AI drafts a
  *                              reply that waits for human approval.
+ * - POST /webhooks/unipile/relations — a cold lead accepted the connection request (Trigger A);
+ *                              the AI drafts the warm opener (pending approval).
  * - GET  /pending           — list messages awaiting approval (the HITL queue).
  * - POST /approve           — approve a draft and send it via Unipile.
  * - POST /reject            — discard a draft.
@@ -17,9 +19,11 @@ import type { UnipileClient } from './channel/index.js';
 import {
   approveMessage,
   dispatchApprovedForLead,
+  handleNewRelation,
   handleUnipileWebhook,
   rejectMessage,
   type UnipileInboundWebhook,
+  type UnipileNewRelationWebhook,
 } from './channel/index.js';
 import { logger } from './lib/logger.js';
 
@@ -53,6 +57,14 @@ export async function route(deps: AppDeps, req: RouteRequest): Promise<RouteResp
       return { status: 401, json: { error: 'bad secret' } };
     }
     const turn = await handleUnipileWebhook(deps, req.body as unknown as UnipileInboundWebhook);
+    return { status: 200, json: { ok: true, leadId: turn?.leadId ?? null, node: turn?.node ?? null } };
+  }
+
+  if (method === 'POST' && path === '/webhooks/unipile/relations') {
+    if (deps.webhookSecret && req.headers['x-webhook-secret'] !== deps.webhookSecret) {
+      return { status: 401, json: { error: 'bad secret' } };
+    }
+    const turn = await handleNewRelation(deps, req.body as unknown as UnipileNewRelationWebhook);
     return { status: 200, json: { ok: true, leadId: turn?.leadId ?? null, node: turn?.node ?? null } };
   }
 

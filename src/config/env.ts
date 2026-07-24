@@ -31,6 +31,9 @@ const envSchema = z.object({
   LINKEDIN_DMS_PER_DAY_LIMIT: z.coerce.number().int().positive().default(30),
   LINKEDIN_RANDOMIZATION_MIN_MS: z.coerce.number().int().nonnegative().default(45000),
   LINKEDIN_RANDOMIZATION_MAX_MS: z.coerce.number().int().nonnegative().default(180000),
+  /** Trigger A: max cold connection requests per import run. Start low, ramp slowly
+   * (LinkedIn caps invites ~100-200/week). Defaults to LINKEDIN_DMS_PER_DAY_LIMIT. */
+  COLD_INVITE_DAILY_CAP: z.coerce.number().int().positive().optional(),
   HITL_REQUIRED_BEFORE_SEND: z
     .string()
     .default('true')

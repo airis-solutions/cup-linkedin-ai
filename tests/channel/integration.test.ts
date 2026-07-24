@@ -1,7 +1,13 @@
 import { InMemoryRepository } from '../../src/store/memory.js';
 import { handleOpener, handleInbound, type OrchestratorDeps } from '../../src/orchestrator.js';
-import { handleUnipileWebhook, approveMessage, dispatchApprovedForLead } from '../../src/channel/index.js';
+import {
+  handleUnipileWebhook,
+  handleNewRelation,
+  approveMessage,
+  dispatchApprovedForLead,
+} from '../../src/channel/index.js';
 import type { UnipileClient } from '../../src/channel/index.js';
+import { importColdLeads } from '../../src/handlers/import-cold-leads.js';
 import type { FlowNode, InboundUnderstanding, LeadRecord } from '../../src/brain/types.js';
 
 const VARS = (lead: LeadRecord) => ({
@@ -91,6 +97,50 @@ describe('inbound webhook → AI → reply via Unipile', () => {
     expect(turn).toBeNull();
     expect(await repo.findLeadByProviderId('robin_self')).toBeNull();
     expect((await repo.pendingApprovals()).length).toBe(0);
+  });
+});
+
+describe('Trigger A: full chain — cold import → accept → opener → cold DM sent', () => {
+  it('imports a Sales Nav row, invites, fires the opener on accept, and sends it once approved', async () => {
+    const repo = new InMemoryRepository();
+    const deps = makeDeps(repo);
+
+    // Unipile stub spanning both halves: resolve + invite (import) and startChat (dispatch).
+    const invited: string[] = [];
+    const started: { attendeeId: string; text: string }[] = [];
+    const unipile = {
+      resolveProfile: async (identifier: string) => ({ ok: true, providerId: `prov_${identifier}`, name: 'Max Mustermann' }),
+      sendInvitation: async (providerId: string) => {
+        invited.push(providerId);
+        return { ok: true, id: 'inv1' };
+      },
+      startChat: async (attendeeId: string, text: string) => {
+        started.push({ attendeeId, text });
+        return { ok: true, id: 'cNew', chatId: 'cNew' };
+      },
+    } as unknown as UnipileClient;
+
+    // 1. Import one Sales Nav lead -> connection request sent, lead sits at 'invited', no message yet.
+    const imp = await importColdLeads({ repo, unipile }, [{ linkedinUrl: 'https://www.linkedin.com/in/max-mustermann', firstName: 'Max' }], { cap: 5 });
+    expect(imp).toMatchObject({ total: 1, invited: 1, skipped: 0, failed: 0 });
+    expect(invited).toEqual(['prov_max-mustermann']);
+    const lead = await repo.findLeadByProviderId('prov_max-mustermann');
+    expect(lead?.stage).toBe('invited');
+    expect((await repo.pendingApprovals()).length).toBe(0);
+
+    // 2. They accept the request -> new_relation webhook fires the warm opener (pending approval).
+    const turn = await handleNewRelation(deps, { user_provider_id: 'prov_max-mustermann', user_full_name: 'Max Mustermann' });
+    expect(turn?.leadId).toBe(lead!.id);
+    const pending = await repo.pendingApprovals();
+    expect(pending.length).toBe(1);
+
+    // 3. Human approves -> dispatch opens the cold chat with the opener, personalised to the lead.
+    await approveMessage(repo, pending[0].id);
+    const res = await dispatchApprovedForLead({ repo, unipile }, lead!.id);
+    expect(res.sent).toBe(1);
+    expect(started[0].attendeeId).toBe('prov_max-mustermann');
+    expect(started[0].text).toContain('Hi Max');
+    expect((await repo.getLead(lead!.id))?.unipileChatId).toBe('cNew');
   });
 });
 
