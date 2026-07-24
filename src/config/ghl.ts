@@ -55,6 +55,7 @@ export function ghlCustomFields(q: Qualification): GhlCustomField[] {
 export function ghlStageId(stage: FunnelStage): string | null {
   switch (stage) {
     case 'new':
+    case 'invited':
     case 'opener_sent':
     case 'qualifying':
       return GHL.stages.contacted;
@@ -73,7 +74,13 @@ export function ghlStageId(stage: FunnelStage): string | null {
 
 /** Only qualified leads become an Opportunity in the Leads pipeline. */
 export function shouldCreateOpportunity(stage: FunnelStage): boolean {
-  return ghlStageId(stage) !== null && stage !== 'opener_sent' && stage !== 'new' && stage !== 'qualifying';
+  return (
+    ghlStageId(stage) !== null &&
+    stage !== 'opener_sent' &&
+    stage !== 'new' &&
+    stage !== 'invited' &&
+    stage !== 'qualifying'
+  );
 }
 
 /** Booking link with the lead's name pre-filled (Fabi: prefill name via ?name=; email/phone self-entered). */

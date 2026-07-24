@@ -66,9 +66,10 @@ export type FlowNode =
   | 'booked'
   | 'parked';
 
-/** DB funnel_stage enum (mirrors supabase/migrations/0001_init.sql). */
+/** DB funnel_stage enum (mirrors supabase/migrations/0001_init.sql + 0004_invited_stage.sql). */
 export type FunnelStage =
   | 'new'
+  | 'invited' // cold_outbound: connection request sent, awaiting accept (Trigger A)
   | 'opener_sent'
   | 'qualifying'
   | 'qualified'
