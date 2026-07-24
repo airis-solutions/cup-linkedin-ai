@@ -65,13 +65,14 @@ describe('UnipileClient.resolveProfile', () => {
     const captured: Captured[] = [];
     const client = new UnipileClient({
       ...cfgBase,
-      fetchImpl: stub(captured, { json: { provider_id: 'prov_77', name: 'Felix Schreppel' } }),
+      fetchImpl: stub(captured, { json: { provider_id: 'prov_77', name: 'Felix Schreppel', location: 'Berlin, Germany' } }),
     });
     const res = await client.resolveProfile('felix-schreppel');
 
     expect(res.ok).toBe(true);
     expect(res.providerId).toBe('prov_77');
     expect(res.name).toBe('Felix Schreppel');
+    expect(res.location).toBe('Berlin, Germany');
     expect(captured[0].url).toBe('https://api8.unipile.com:13845/api/v1/users/felix-schreppel?account_id=ACC1');
     expect(captured[0].method).toBe('GET');
     expect(captured[0].headers?.['X-API-KEY']).toBe('KEY123');

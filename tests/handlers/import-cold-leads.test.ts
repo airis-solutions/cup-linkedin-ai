@@ -1,5 +1,5 @@
 import { InMemoryRepository } from '../../src/store/memory.js';
-import { importColdLeads, type ColdLeadRow, type ImportDeps } from '../../src/handlers/import-cold-leads.js';
+import { importColdLeads, languageFromLocation, type ColdLeadRow, type ImportDeps } from '../../src/handlers/import-cold-leads.js';
 import type { ResolveResult, SendResult } from '../../src/channel/unipile.js';
 
 /** Configurable Unipile stub: resolves every identifier to `prov_<identifier>` unless overridden. */
@@ -98,6 +98,16 @@ describe('importColdLeads', () => {
     expect(resolves).toEqual([]);
   });
 
+  it('sets the opener language from the lead country (DACH -> de, else en)', async () => {
+    const repo = new InMemoryRepository();
+    const { unipile } = stubUnipile({
+      resolve: (id) => ({ ok: true, providerId: `prov_${id}`, location: id === 'de' ? 'Stuttgart, Germany' : 'Austin, Texas, United States' }),
+    });
+    await importColdLeads({ repo, unipile }, [row('de'), row('us')], { cap: 10 });
+    expect((await repo.findLeadByLinkedinUrl('https://www.linkedin.com/in/de'))?.brain.language).toBe('de');
+    expect((await repo.findLeadByLinkedinUrl('https://www.linkedin.com/in/us'))?.brain.language).toBe('en');
+  });
+
   it('dry-run resolves and previews without creating leads or sending invites', async () => {
     const repo = new InMemoryRepository();
     const { unipile, invites } = stubUnipile();
@@ -107,5 +117,19 @@ describe('importColdLeads', () => {
     expect(res).toMatchObject({ total: 2, invited: 2, failed: 0, dryRun: true });
     expect(invites).toEqual([]);
     expect(await repo.findLeadByLinkedinUrl('https://www.linkedin.com/in/a')).toBeNull();
+  });
+});
+
+describe('languageFromLocation', () => {
+  it('maps DACH locations to German', () => {
+    for (const loc of ['Stuttgart, Baden-Württemberg, Germany', 'Wien, Österreich', 'Zürich, Switzerland', 'Vaduz, Liechtenstein']) {
+      expect(languageFromLocation(loc)).toBe('de');
+    }
+  });
+
+  it('maps everything else (and unknown) to English', () => {
+    for (const loc of ['Austin, Texas, United States', 'London, United Kingdom', 'Paris, France', undefined, '']) {
+      expect(languageFromLocation(loc)).toBe('en');
+    }
   });
 });

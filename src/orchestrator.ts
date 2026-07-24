@@ -93,6 +93,12 @@ async function commitDecision(
 ): Promise<MessageRecord | undefined> {
   let draft: MessageRecord | undefined;
   if (decision.reply) {
+    // Proactive first touch we initiated (Trigger A/C): they accepted our request, they did
+    // not message us first — so the opener greets + thanks for connecting, not "you reached out".
+    const coldOpen =
+      decision.nextNode === 'welcome' &&
+      !ctx.inbound &&
+      (lead.source === 'cold_outbound' || lead.source === 'post_engagement');
     const text = await deps.generate({
       node: decision.nextNode,
       canonical: decision.reply,
@@ -101,6 +107,7 @@ async function commitDecision(
       history: ctx.history,
       inbound: ctx.inbound,
       intent: ctx.intent,
+      coldOpen,
     });
     draft = await persistOutbound(deps, lead.id, text, decision.nextNode);
   }

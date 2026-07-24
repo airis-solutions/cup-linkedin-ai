@@ -35,6 +35,9 @@ export interface GenerateParams {
   /** The prospect's latest inbound message, if this turn is a reply. */
   inbound?: string;
   intent?: ReplyIntent;
+  /** True when this is a proactive first touch WE initiated (cold outbound / post-engagement):
+   * they accepted our connection request, they did NOT message us first. Shapes the opener. */
+  coldOpen?: boolean;
 }
 
 export type GenerateReply = (p: GenerateParams) => Promise<string>;
@@ -95,6 +98,9 @@ function instruction(p: GenerateParams, avoid?: string): string {
   return [
     `Conversation so far:\n${transcript(p.history)}`,
     p.inbound ? `\nTheir latest message: "${p.inbound}"` : '',
+    p.coldOpen
+      ? `\nContext: YOU sent this person a connection request and they just accepted it — they have NOT messaged you first. This is your opening line: greet them and thank them for connecting, then lead in. Never imply they reached out to you, wrote to you, or asked you anything.`
+      : '',
     `\nReply as Robin, in ${lang} — a real person texting on LinkedIn, not a script. Sound human and relaxed, and genuinely respond to what they just said.`,
     askedAboutCgp
       ? `They asked a real question about CGP. Answer it honestly first, in one or two plain sentences from what you actually know (no invented numbers, deep detail belongs on the call). Don't dodge it.`

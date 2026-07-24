@@ -38,6 +38,8 @@ export interface ResolveResult {
   providerId?: string;
   /** Display name from LinkedIn, if returned. */
   name?: string;
+  /** Free-text location, e.g. "Stuttgart, Baden-Württemberg, Germany" — used to pick the language. */
+  location?: string;
   error?: string;
 }
 
@@ -114,11 +116,12 @@ export class UnipileClient {
         name?: string;
         first_name?: string;
         last_name?: string;
+        location?: string;
       };
       const providerId = d.provider_id ?? d.id;
       const name = d.name ?? ([d.first_name, d.last_name].filter(Boolean).join(' ') || undefined);
       if (!providerId) return { ok: false, error: 'no provider_id in response' };
-      return { ok: true, providerId, name };
+      return { ok: true, providerId, name, location: d.location || undefined };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }

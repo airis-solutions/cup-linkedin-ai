@@ -11,8 +11,26 @@
  * batch and `delayMs` spaces requests out; never blast.
  */
 import type { Repository } from '../store/repository.js';
+import type { Language } from '../brain/types.js';
 import { publicIdentifierFromUrl, type UnipileClient } from '../channel/unipile.js';
 import { logger } from '../lib/logger.js';
+
+/** DACH country names (English + native) as they appear in LinkedIn location strings. */
+const DACH_COUNTRIES = [
+  'germany', 'deutschland', 'austria', 'österreich', 'osterreich',
+  'switzerland', 'schweiz', 'suisse', 'svizzera', 'liechtenstein',
+];
+
+/**
+ * Pick the opener language from a LinkedIn location string: DACH -> German, everything else
+ * (and unknown) -> English. Cold leads have no inbound message yet, so location is our only
+ * language signal for the opener; after the first reply the classifier takes over.
+ */
+export function languageFromLocation(location?: string): Language {
+  if (!location) return 'en';
+  const l = location.toLowerCase();
+  return DACH_COUNTRIES.some((c) => l.includes(c)) ? 'de' : 'en';
+}
 
 export interface ColdLeadRow {
   /** Regular LinkedIn profile URL (linkedin.com/in/…), not the /sales/lead/ URL. */
@@ -96,6 +114,8 @@ export async function importColdLeads(
       fullName: row.fullName ?? resolved.name,
     });
     lead.linkedinProviderId = resolved.providerId;
+    // Set the opener language from their country now (no inbound to detect it from yet).
+    lead.brain = { ...lead.brain, language: languageFromLocation(resolved.location) };
 
     const invite = await deps.unipile.sendInvitation(resolved.providerId);
     if (!invite.ok) {
