@@ -1,4 +1,10 @@
-import { UnipileClient, parseInbound, firstNameOf } from '../../src/channel/unipile.js';
+import {
+  UnipileClient,
+  parseInbound,
+  firstNameOf,
+  publicIdentifierFromUrl,
+  parseNewRelation,
+} from '../../src/channel/unipile.js';
 
 type Captured = { url: string; method?: string; headers?: Record<string, string>; body?: unknown };
 
@@ -51,6 +57,90 @@ describe('UnipileClient.startChat', () => {
     expect(form.get('account_id')).toBe('ACC1');
     expect(form.get('attendees_ids')).toBe('attendee9');
     expect(form.get('text')).toBe('Hi Daniel, Robin here.');
+  });
+});
+
+describe('UnipileClient.resolveProfile', () => {
+  it('GETs /users/{identifier} with the account_id and returns the provider id', async () => {
+    const captured: Captured[] = [];
+    const client = new UnipileClient({
+      ...cfgBase,
+      fetchImpl: stub(captured, { json: { provider_id: 'prov_77', name: 'Felix Schreppel' } }),
+    });
+    const res = await client.resolveProfile('felix-schreppel');
+
+    expect(res.ok).toBe(true);
+    expect(res.providerId).toBe('prov_77');
+    expect(res.name).toBe('Felix Schreppel');
+    expect(captured[0].url).toBe('https://api8.unipile.com:13845/api/v1/users/felix-schreppel?account_id=ACC1');
+    expect(captured[0].method).toBe('GET');
+    expect(captured[0].headers?.['X-API-KEY']).toBe('KEY123');
+  });
+
+  it('fails when the response has no provider id', async () => {
+    const client = new UnipileClient({ ...cfgBase, fetchImpl: stub([], { json: {} }) });
+    const res = await client.resolveProfile('ghost');
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe('UnipileClient.sendInvitation', () => {
+  it('POSTs /users/invite with account_id + provider_id as JSON (blank connect)', async () => {
+    const captured: Captured[] = [];
+    const client = new UnipileClient({
+      ...cfgBase,
+      fetchImpl: stub(captured, { json: { invitation_id: 'inv_1' } }),
+    });
+    const res = await client.sendInvitation('prov_77');
+
+    expect(res.ok).toBe(true);
+    expect(res.id).toBe('inv_1');
+    expect(captured[0].url).toBe('https://api8.unipile.com:13845/api/v1/users/invite');
+    expect(captured[0].method).toBe('POST');
+    expect(captured[0].headers?.['content-type']).toBe('application/json');
+    expect(JSON.parse(captured[0].body as string)).toEqual({ account_id: 'ACC1', provider_id: 'prov_77' });
+  });
+
+  it('returns an error result on a non-ok response', async () => {
+    const client = new UnipileClient({ ...cfgBase, fetchImpl: stub([], { ok: false, status: 422, text: 'already invited' }) });
+    const res = await client.sendInvitation('p1');
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('422');
+  });
+});
+
+describe('publicIdentifierFromUrl', () => {
+  it('extracts the /in/ slug from profile URLs', () => {
+    expect(publicIdentifierFromUrl('https://www.linkedin.com/in/felix-schreppel/')).toBe('felix-schreppel');
+    expect(publicIdentifierFromUrl('https://linkedin.com/in/max-muster?foo=bar')).toBe('max-muster');
+    expect(publicIdentifierFromUrl('linkedin.com/in/jane.doe')).toBe('jane.doe');
+  });
+
+  it('returns undefined for a Sales Navigator lead URL or empty input', () => {
+    expect(publicIdentifierFromUrl('https://www.linkedin.com/sales/lead/ACwAAA')).toBeUndefined();
+    expect(publicIdentifierFromUrl(undefined)).toBeUndefined();
+    expect(publicIdentifierFromUrl('')).toBeUndefined();
+  });
+});
+
+describe('parseNewRelation', () => {
+  it('normalises a new_relation webhook to provider id + name', () => {
+    const r = parseNewRelation({
+      event: 'new_relation',
+      account_id: 'ACC1',
+      user_provider_id: 'prov_88',
+      user_full_name: 'Max Mustermann',
+      user_profile_url: 'https://www.linkedin.com/in/max-mustermann',
+    });
+    expect(r).toEqual({
+      providerId: 'prov_88',
+      name: 'Max Mustermann',
+      profileUrl: 'https://www.linkedin.com/in/max-mustermann',
+    });
+  });
+
+  it('yields no provider id when the field is absent', () => {
+    expect(parseNewRelation({ event: 'new_relation' }).providerId).toBeUndefined();
   });
 });
 

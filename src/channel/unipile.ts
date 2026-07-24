@@ -6,6 +6,8 @@
  *   auth      = X-API-KEY header
  *   send reply  -> POST /chats/{chat_id}/messages   (text, multipart)
  *   first DM    -> POST /chats                       (account_id, attendees_ids, text)
+ *   resolve     -> GET  /users/{identifier}          (public identifier -> provider_id)
+ *   invite      -> POST /users/invite                (account_id, provider_id) [Trigger A]
  *
  * `fetchImpl` is injectable so the request building is unit-testable without network.
  */
@@ -27,6 +29,15 @@ export interface UnipileConfig {
 export interface SendResult {
   ok: boolean;
   id?: string;
+  error?: string;
+}
+
+export interface ResolveResult {
+  ok: boolean;
+  /** The provider id needed to invite or message this person. */
+  providerId?: string;
+  /** Display name from LinkedIn, if returned. */
+  name?: string;
   error?: string;
 }
 
@@ -84,6 +95,53 @@ export class UnipileClient {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   }
+
+  /**
+   * Resolve a LinkedIn profile to its provider id (needed to invite / message).
+   * `identifier` is the public identifier from the profile URL (e.g. "felix-schreppel").
+   */
+  async resolveProfile(identifier: string): Promise<ResolveResult> {
+    const qs = `?account_id=${encodeURIComponent(this.cfg.accountId)}`;
+    try {
+      const res = await this.fetch(this.url(`/users/${encodeURIComponent(identifier)}${qs}`), {
+        method: 'GET',
+        headers: this.headers(),
+      });
+      if (!res.ok) return { ok: false, error: `Unipile ${res.status}: ${(await res.text()).slice(0, 200)}` };
+      const d = (await res.json()) as {
+        provider_id?: string;
+        id?: string;
+        name?: string;
+        first_name?: string;
+        last_name?: string;
+      };
+      const providerId = d.provider_id ?? d.id;
+      const name = d.name ?? ([d.first_name, d.last_name].filter(Boolean).join(' ') || undefined);
+      if (!providerId) return { ok: false, error: 'no provider_id in response' };
+      return { ok: true, providerId, name };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
+   * Send a LinkedIn connection request (Trigger A). No note = "blank connect" (highest
+   * accept rate, no compliance surface). The AI's opener fires only once they accept.
+   */
+  async sendInvitation(providerId: string): Promise<SendResult> {
+    try {
+      const res = await this.fetch(this.url('/users/invite'), {
+        method: 'POST',
+        headers: { ...this.headers(), 'content-type': 'application/json' },
+        body: JSON.stringify({ account_id: this.cfg.accountId, provider_id: providerId }),
+      });
+      if (!res.ok) return { ok: false, error: `Unipile ${res.status}: ${(await res.text()).slice(0, 200)}` };
+      const d = (await res.json()) as { invitation_id?: string; id?: string };
+      return { ok: true, id: d.invitation_id ?? d.id };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
 }
 
 /** Shape of an incoming-message webhook from Unipile (the fields we use). */
@@ -129,4 +187,39 @@ export function parseInbound(payload: UnipileInboundWebhook): {
 /** First name from a LinkedIn display name ("Felix Schreppel" -> "Felix"). */
 export function firstNameOf(name: string | undefined): string | undefined {
   return name?.trim().split(/\s+/)[0] || undefined;
+}
+
+/**
+ * Extract the public identifier from a LinkedIn profile URL for `resolveProfile`.
+ * "https://www.linkedin.com/in/felix-schreppel/" -> "felix-schreppel".
+ * Returns undefined for a Sales Navigator /sales/lead/ URL (no public identifier in it).
+ */
+export function publicIdentifierFromUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  const slug = url.match(/\/in\/([^/?#]+)/i)?.[1];
+  return slug ? decodeURIComponent(slug) : undefined;
+}
+
+/** Shape of a Unipile USERS webhook `new_relation` event (the fields we use). */
+export interface UnipileNewRelationWebhook {
+  /** Event discriminator; the USERS webhook also emits other event types. */
+  event?: string;
+  account_id?: string;
+  /** The newly connected user's provider id + name (field names per Unipile USERS webhook). */
+  user_provider_id?: string;
+  user_full_name?: string;
+  user_profile_url?: string;
+}
+
+/** Normalise a `new_relation` webhook to the bits the handler needs. */
+export function parseNewRelation(payload: UnipileNewRelationWebhook): {
+  providerId?: string;
+  name?: string;
+  profileUrl?: string;
+} {
+  return {
+    providerId: payload.user_provider_id || undefined,
+    name: payload.user_full_name?.trim() || undefined,
+    profileUrl: payload.user_profile_url || undefined,
+  };
 }
