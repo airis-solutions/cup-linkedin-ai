@@ -56,6 +56,8 @@ export interface MessageRecord {
   node?: string;
   /** Set when the guard flagged the body for human review before send. */
   guardFlagged?: boolean;
+  /** Unipile message id for an inbound message — dedupes redelivered webhooks. */
+  unipileMessageId?: string;
   createdAt: string;
 }
 
@@ -88,6 +90,8 @@ export interface Repository {
     msg: Omit<MessageRecord, 'id' | 'createdAt'>,
   ): Promise<MessageRecord>;
   appendEvent(evt: Omit<EventRecord, 'id' | 'occurredAt'>): Promise<EventRecord>;
+  /** Find an inbound message by its Unipile id (dedupe redelivered webhooks). */
+  findInboundByUnipileId(unipileMessageId: string): Promise<MessageRecord | null>;
   /** Messages awaiting a human approve/reject before send. */
   pendingApprovals(): Promise<MessageRecord[]>;
   messagesForLead(leadId: string): Promise<MessageRecord[]>;

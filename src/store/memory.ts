@@ -75,6 +75,10 @@ export class InMemoryRepository implements Repository {
     return record;
   }
 
+  async findInboundByUnipileId(unipileMessageId: string): Promise<MessageRecord | null> {
+    return this.messages.find((m) => m.direction === 'inbound' && m.unipileMessageId === unipileMessageId) ?? null;
+  }
+
   async pendingApprovals(): Promise<MessageRecord[]> {
     return this.messages.filter((m) => m.status === 'pending_hitl');
   }

@@ -164,6 +164,14 @@ describe('parseInbound', () => {
     });
   });
 
+  it('extracts the Unipile message_id for deduping', () => {
+    const r = parseInbound({
+      account_id: 'ACC1', chat_id: 'c7', message_id: 'msg-42',
+      sender: { attendee_provider_id: 'lnkd_55' }, message: 'hi',
+    });
+    expect(r.messageId).toBe('msg-42');
+  });
+
   it('firstNameOf takes the first token (or undefined)', () => {
     expect(firstNameOf('Felix Schreppel')).toBe('Felix');
     expect(firstNameOf('  Max  Mustermann ')).toBe('Max');

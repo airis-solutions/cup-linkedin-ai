@@ -52,6 +52,7 @@ function rowToMessage(r: Row): MessageRecord {
     body: r.body as string,
     node: (r.node as string) ?? undefined,
     guardFlagged: Boolean(r.guard_flagged),
+    unipileMessageId: (r.unipile_message_id as string) ?? undefined,
     createdAt: r.created_at as string,
   };
 }
@@ -135,11 +136,23 @@ export class SupabaseRepository implements Repository {
         body: msg.body,
         node: msg.node,
         guard_flagged: msg.guardFlagged ?? false,
+        unipile_message_id: msg.unipileMessageId,
       })
       .select('*')
       .single();
     if (error) throw new Error(`appendMessage: ${error.message}`);
     return rowToMessage(data);
+  }
+
+  async findInboundByUnipileId(unipileMessageId: string): Promise<MessageRecord | null> {
+    const { data, error } = await this.sb
+      .from('messages')
+      .select('*')
+      .eq('unipile_message_id', unipileMessageId)
+      .eq('direction', 'inbound')
+      .maybeSingle();
+    if (error) throw new Error(`findInboundByUnipileId: ${error.message}`);
+    return data ? rowToMessage(data) : null;
   }
 
   async appendEvent(evt: Omit<EventRecord, 'id' | 'occurredAt'>): Promise<EventRecord> {

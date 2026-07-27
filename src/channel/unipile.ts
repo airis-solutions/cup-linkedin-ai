@@ -151,6 +151,8 @@ export class UnipileClient {
 export interface UnipileInboundWebhook {
   account_id: string;
   chat_id: string;
+  /** Unipile's id for this message — used to dedupe redelivered webhooks. */
+  message_id?: string;
   /** The connected account owner. Unipile delivers the owner's OWN sent messages too, so
    * we compare this against `sender` to drop them (otherwise the AI replies to itself). */
   account_info?: { user_id?: string };
@@ -170,6 +172,8 @@ export function parseInbound(payload: UnipileInboundWebhook): {
   /** Sender's display name from LinkedIn, e.g. "Felix Schreppel". */
   senderName?: string;
   text: string;
+  /** Unipile message id, for deduping redelivered webhooks. */
+  messageId?: string;
   /** True when Robin's own account sent this message — Unipile echoes those back. */
   fromSelf: boolean;
 } {
@@ -183,6 +187,7 @@ export function parseInbound(payload: UnipileInboundWebhook): {
     senderId,
     senderName: payload.sender?.attendee_name?.trim() || undefined,
     text: payload.message ?? payload.text ?? '',
+    messageId: payload.message_id || undefined,
     fromSelf,
   };
 }

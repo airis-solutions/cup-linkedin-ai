@@ -82,6 +82,25 @@ describe('inbound webhook → AI → reply via Unipile', () => {
     expect(next.node).toBe('q1');
   });
 
+  it('dedupes a redelivered webhook (same message_id) — processes the message once', async () => {
+    const repo = new InMemoryRepository();
+    const deps = makeDeps(repo);
+    const payload = {
+      account_id: 'ACC', chat_id: 'cX', message_id: 'msg-1',
+      sender: { attendee_provider_id: 'p9', attendee_name: 'Max Mustermann' }, message: 'yes sure',
+    };
+
+    const first = await handleUnipileWebhook(deps, payload);
+    const second = await handleUnipileWebhook(deps, payload); // Unipile retried
+
+    expect(first).not.toBeNull();
+    expect(second).toBeNull();
+    const lead = await repo.findLeadByProviderId('p9');
+    const inbound = (await repo.messagesForLead(lead!.id)).filter((m) => m.direction === 'inbound');
+    expect(inbound.length).toBe(1);
+    expect((await repo.pendingApprovals()).length).toBe(1);
+  });
+
   it('ignores the account owner\'s own messages echoed back by Unipile', async () => {
     const repo = new InMemoryRepository();
     const deps = makeDeps(repo);

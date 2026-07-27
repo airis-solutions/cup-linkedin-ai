@@ -13,10 +13,14 @@ export async function handleUnipileWebhook(
   deps: OrchestratorDeps,
   payload: UnipileInboundWebhook,
 ): Promise<TurnResult | null> {
-  const { chatId, senderId, senderName, text, fromSelf } = parseInbound(payload);
+  const { chatId, senderId, senderName, text, messageId, fromSelf } = parseInbound(payload);
   // Unipile echoes the account owner's OWN sent messages back as message_received —
   // ignore them, otherwise the AI keeps replying to itself.
   if (fromSelf || !senderId || !text.trim()) return null;
+
+  // Dedupe: Unipile redelivers a webhook if our reply (a slow Opus call) doesn't ack in time,
+  // which would process the same message twice. Skip if we've already recorded this message id.
+  if (messageId && (await deps.repo.findInboundByUnipileId(messageId))) return null;
 
   const firstName = firstNameOf(senderName);
 
@@ -47,5 +51,5 @@ export async function handleUnipileWebhook(
     if (dirty) await deps.repo.saveLead(lead);
   }
 
-  return handleInbound(deps, lead.id, text);
+  return handleInbound(deps, lead.id, text, messageId);
 }

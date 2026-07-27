@@ -164,6 +164,7 @@ export async function handleInbound(
   deps: OrchestratorDeps,
   leadId: string,
   inboundText: string,
+  unipileMessageId?: string,
 ): Promise<TurnResult> {
   const lead = await deps.repo.getLead(leadId);
   if (!lead) throw new Error(`lead not found: ${leadId}`);
@@ -171,7 +172,7 @@ export async function handleInbound(
   // History BEFORE recording the new inbound (it is passed separately as ctx.inbound).
   const history = await loadHistory(deps.repo, leadId);
 
-  await deps.repo.appendMessage({ leadId, direction: 'inbound', status: 'received', body: inboundText });
+  await deps.repo.appendMessage({ leadId, direction: 'inbound', status: 'received', body: inboundText, unipileMessageId });
   await deps.repo.appendEvent({ leadId, kind: 'reply_received', payload: { node: lead.brain.node } });
 
   const understanding = await deps.classify({ node: lead.brain.node, inboundText });
