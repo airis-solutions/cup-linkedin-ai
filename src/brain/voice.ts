@@ -129,14 +129,23 @@ function extractText(content: { type: string; text?: string }[]): string {
 
 const SYSTEM = asCacheableSystem(ROBIN_BRIEFING);
 
-/** Content problems the guard can't see: invented placeholders or a dropped booking URL. */
-function contentIssues(text: string, canonical: string): string[] {
+/** English fillers/interjections that read as Denglisch in a German message. */
+const DENGLISCH = /\b(fair|alright|all\s?right|nice|cool|got it|makes sense)\b/i;
+
+/** Content problems the guard can't see: placeholders, dropped URL, or Denglisch in a German reply. */
+function contentIssues(text: string, canonical: string, language: Language): string[] {
   const issues: string[] = [];
   if (/\[[^\]\n]{2,}\]/.test(text)) {
     issues.push('a bracketed placeholder — never write [like this], only real values');
   }
   for (const url of canonical.match(/https?:\/\/\S+/g) ?? []) {
     if (!text.includes(url)) issues.push(`the exact link ${url} (it must appear verbatim)`);
+  }
+  if (language === 'de') {
+    const m = text.match(DENGLISCH);
+    if (m) {
+      issues.push(`the English filler "${m[0]}" in a German message — replace it with natural German (e.g. "Verstehe", "Guter Punkt", "Faire Frage", "Passt")`);
+    }
   }
   return issues;
 }
@@ -160,7 +169,7 @@ export async function generateReply(p: GenerateParams, call: ClaudeCaller = call
     const text = extractText(response.content as { type: string; text?: string }[]);
     if (!text) break;
 
-    const issues = contentIssues(text, p.canonical);
+    const issues = contentIssues(text, p.canonical, p.language);
     const guard = scanMessage(text);
     if (issues.length === 0 && guard.ok) return text;
 
