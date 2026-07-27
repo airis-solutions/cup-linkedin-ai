@@ -67,7 +67,7 @@ function systemPrompt(node: FlowNode, priorAnswer?: string): string {
     `Current step: ${node}.`,
     NODE_TASK[node] ?? 'Classify the intent of their reply.',
     '',
-    'IMPORTANT first: is this even a potential CGP customer? If the message is someone selling something TO us, an agency/partnership/collab pitch, a recruiter, an affiliate/"prop firm"/"funded account" offer, or spam — i.e. NOT a person who might become a CGP client — set intent = "not_a_prospect" (this overrides every other intent). Genuine prospects asking about CGP are NOT this.',
+    'IMPORTANT first: "not_a_prospect" is ONLY about WHO is messaging, never about how strong, engaged, or enthusiastic their answer is. Set intent = "not_a_prospect" (this overrides every other intent) ONLY if the SENDER is pitching or selling something TO us: an agency/partnership/collab pitch, a recruiter, an affiliate / "prop firm" / "funded account" / tool-vendor offer, or clear spam. A real potential CGP client who answers vaguely, briefly, unsurely, skeptically, says "I don\'t know" or "not sure what to improve", or sounds only mildly interested is STILL a genuine prospect. NEVER mark such a person not_a_prospect, use answer / other / hesitant / not_interested instead. When in doubt, they ARE a prospect.',
     priorAnswer ? `Their previous answer (for the read-back): "${priorAnswer}"` : '',
     '',
     'Also detect "language": "de" if they wrote in German, otherwise "en".',
