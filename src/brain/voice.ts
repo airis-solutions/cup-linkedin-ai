@@ -94,7 +94,6 @@ function instruction(p: GenerateParams, avoid?: string): string {
       .join('\n');
   }
 
-  const askedAboutCgp = p.intent === 'content_question';
   return [
     `Conversation so far:\n${transcript(p.history)}`,
     p.inbound ? `\nTheir latest message: "${p.inbound}"` : '',
@@ -102,9 +101,10 @@ function instruction(p: GenerateParams, avoid?: string): string {
       ? `\nContext: YOU sent this person a connection request and they just accepted it — they have NOT messaged you first. This is your opening line: greet them and thank them for connecting, then lead in. Never imply they reached out to you, wrote to you, or asked you anything.`
       : '',
     `\nReply as Robin, in ${lang} — a real person texting on LinkedIn, not a script. Sound human and relaxed, and genuinely respond to what they just said.`,
-    askedAboutCgp
-      ? `They asked a real question about CGP. Answer it honestly first, in one or two plain sentences from what you actually know (no invented numbers, deep detail belongs on the call). Don't dodge it.`
+    p.inbound
+      ? `If their message asked you anything at all (even alongside their answer, like "what do you actually do?"), answer it first in one or two honest, plain sentences from what you know (no invented numbers, deep detail belongs on the call), THEN steer on. Never dodge or skip a direct question, that feels evasive.`
       : '',
+    `Never tell them they don't fit, are too new, or that CGP is "more for experienced people", and never discourage them based on their experience level. Stay warm and inclusive; qualifying happens quietly, never by making them feel wrong for their answer.`,
     `Where you're steering this conversation right now (your intent for this reply, NOT a line to recite):`,
     `"""${p.canonical}"""`,
     `Move toward that the way a person naturally would. Usually that means asking the one thing you still want to know, or nudging toward a call — but you don't have to fire it as a stiff question every message. Being conversational and flexible is good. Keep any URL exactly as written, and never write a placeholder like [link] or [name] — only ever use real values.`,
