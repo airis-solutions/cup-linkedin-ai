@@ -37,6 +37,15 @@ export class InMemoryRepository implements Repository {
     return null;
   }
 
+  async findLeadByEmail(email: string): Promise<LeadRecord | null> {
+    const needle = email.trim().toLowerCase();
+    if (!needle) return null;
+    for (const lead of this.leads.values()) {
+      if (lead.email?.trim().toLowerCase() === needle) return lead;
+    }
+    return null;
+  }
+
   async createLead(input: CreateLeadInput): Promise<LeadRecord> {
     const now = new Date().toISOString();
     const lead: LeadRecord = {

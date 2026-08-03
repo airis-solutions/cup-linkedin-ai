@@ -19,7 +19,12 @@ export type MessageDirection = 'outbound' | 'inbound';
 
 export type MessageStatus = 'pending_hitl' | 'approved' | 'sent' | 'failed' | 'received' | 'skipped';
 
-export type EventKind = BrainEventKind | 'lead_created' | 'reply_received' | 'opener_sent';
+export type EventKind =
+  | BrainEventKind
+  | 'lead_created'
+  | 'reply_received'
+  | 'opener_sent'
+  | 'booking_confirmed';
 
 export interface LeadRecord {
   id: string;
@@ -83,6 +88,8 @@ export interface Repository {
   findLeadByLinkedinUrl(url: string): Promise<LeadRecord | null>;
   /** Find a lead by their LinkedIn provider id (used to map inbound webhooks). */
   findLeadByProviderId(providerId: string): Promise<LeadRecord | null>;
+  /** Find a lead by the email captured in-chat (used to map GHL booking webhooks). */
+  findLeadByEmail(email: string): Promise<LeadRecord | null>;
   createLead(input: CreateLeadInput): Promise<LeadRecord>;
   /** Persist brain state, stage, qualification, do-not-contact. */
   saveLead(lead: LeadRecord): Promise<void>;

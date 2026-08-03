@@ -26,10 +26,11 @@ interface Calls {
   update: number;
   createOpp: { name: string; pipelineStageId: string; contactId: string }[];
   stageUpdates: { id: string; stage: string }[];
+  findOpp: number;
 }
 
 function fakeGhl(over: Partial<GhlClient> = {}): { ghl: GhlClient; calls: Calls } {
-  const calls: Calls = { upsert: 0, update: 0, createOpp: [], stageUpdates: [] };
+  const calls: Calls = { upsert: 0, update: 0, createOpp: [], stageUpdates: [], findOpp: 0 };
   const ghl = {
     upsertContact: async () => {
       calls.upsert++;
@@ -46,6 +47,11 @@ function fakeGhl(over: Partial<GhlClient> = {}): { ghl: GhlClient; calls: Calls 
     updateOpportunityStage: async (id: string, stage: string) => {
       calls.stageUpdates.push({ id, stage });
       return { ok: true as const };
+    },
+    // Default: no opportunity exists yet for the contact (so the create path runs).
+    findOpportunityByContact: async () => {
+      calls.findOpp++;
+      return { ok: true as const, data: null };
     },
     ...over,
   } as unknown as GhlClient;
@@ -76,6 +82,23 @@ describe('syncLeadToGhl', () => {
     expect(calls.update).toBe(1);
     expect(calls.createOpp).toHaveLength(0);
     expect(calls.stageUpdates).toEqual([{ id: 'O1', stage: GHL.stages.salesCallBooked }]);
+  });
+
+  it('adopts an existing opportunity instead of creating a duplicate', async () => {
+    // e.g. CGP's booking page already opened an opportunity in "Sales Call Booked".
+    const { ghl, calls } = fakeGhl({
+      findOpportunityByContact: async () => ({
+        ok: true as const,
+        data: { id: 'EXISTING', pipelineStageId: GHL.stages.salesCallBooked },
+      }),
+    });
+    const lead = makeLead({ stage: 'booked', ghlContactId: 'C1' });
+    const { changed } = await syncLeadToGhl(ghl, lead);
+
+    expect(changed).toBe(true);
+    expect(calls.createOpp).toHaveLength(0);
+    expect(lead.ghlOpportunityId).toBe('EXISTING');
+    expect(calls.stageUpdates).toEqual([{ id: 'EXISTING', stage: GHL.stages.salesCallBooked }]);
   });
 
   it('syncs an unqualified lead as a contact only (no opportunity)', async () => {

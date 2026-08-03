@@ -199,8 +199,9 @@ export function advance(state: BrainState, u: InboundUnderstanding, vars: FlowVa
  * Max two value-touches, then parked. After the booking link, a single 72h reminder.
  */
 export function onSilence(state: BrainState, vars: FlowVars): BrainDecision {
-  // Never re-engage someone we flagged as a non-customer.
-  if (state.node === 'not_prospect') return decide(state.node, undefined, {}, []);
+  // Never re-engage someone we flagged as a non-customer, or who already booked —
+  // once the call is on the calendar, no reminder or value-touch should ever fire.
+  if (state.node === 'not_prospect' || state.node === 'booked') return decide(state.node, undefined, {}, []);
   if (state.node === 'send_link') {
     return decide('booking_reminder', fill(FIXED_COPY.booking_reminder ?? '', vars), {}, []);
   }

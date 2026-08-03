@@ -5,6 +5,8 @@
  *                              reply that waits for human approval.
  * - POST /webhooks/unipile/relations — a cold lead accepted the connection request (Trigger A);
  *                              the AI drafts the warm opener (pending approval).
+ * - POST /webhooks/ghl      — GHL fires when a prospect books a slot; we mark the lead booked
+ *                              and stop follow-ups.
  * - GET  /pending           — list messages awaiting approval (the HITL queue).
  * - POST /approve           — approve a draft and send it via Unipile.
  * - POST /reject            — discard a draft.
@@ -19,9 +21,11 @@ import type { UnipileClient } from './channel/index.js';
 import {
   approveMessage,
   dispatchApprovedForLead,
+  handleGhlAppointmentWebhook,
   handleNewRelation,
   handleUnipileWebhook,
   rejectMessage,
+  type GhlAppointmentWebhook,
   type UnipileInboundWebhook,
   type UnipileNewRelationWebhook,
 } from './channel/index.js';
@@ -66,6 +70,17 @@ export async function route(deps: AppDeps, req: RouteRequest): Promise<RouteResp
     }
     const turn = await handleNewRelation(deps, req.body as unknown as UnipileNewRelationWebhook);
     return { status: 200, json: { ok: true, leadId: turn?.leadId ?? null, node: turn?.node ?? null } };
+  }
+
+  if (method === 'POST' && path === '/webhooks/ghl') {
+    if (deps.webhookSecret && req.headers['x-webhook-secret'] !== deps.webhookSecret) {
+      return { status: 401, json: { error: 'bad secret' } };
+    }
+    const result = await handleGhlAppointmentWebhook(
+      { repo: deps.repo, ghl: deps.ghl },
+      req.body as unknown as GhlAppointmentWebhook,
+    );
+    return { status: 200, json: { ok: true, booking: result } };
   }
 
   if (method === 'GET' && path === '/pending') {

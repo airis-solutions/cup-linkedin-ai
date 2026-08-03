@@ -82,6 +82,20 @@ export class SupabaseRepository implements Repository {
     return data ? rowToLead(data) : null;
   }
 
+  async findLeadByEmail(email: string): Promise<LeadRecord | null> {
+    const needle = email.trim();
+    if (!needle) return null;
+    // Case-insensitive; newest first in the rare case two leads share an email.
+    const { data, error } = await this.sb
+      .from('leads')
+      .select('*')
+      .ilike('email', needle)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    if (error) throw new Error(`findLeadByEmail: ${error.message}`);
+    return data && data.length > 0 ? rowToLead(data[0]) : null;
+  }
+
   async createLead(input: CreateLeadInput): Promise<LeadRecord> {
     const { data, error } = await this.sb
       .from('leads')

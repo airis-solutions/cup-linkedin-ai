@@ -58,6 +58,16 @@ export async function syncLeadToGhl(ghl: GhlClient, lead: LeadRecord): Promise<{
   // 2) Opportunity — only for qualified+ leads (Fabi: unqualified = contact only).
   const stageId = ghlStageId(lead.stage);
   if (shouldCreateOpportunity(lead.stage) && stageId && lead.ghlContactId) {
+    // Adopt an opportunity another source already opened for this contact (e.g. CGP's
+    // booking page creates one in "Sales Call Booked") so we never create a duplicate.
+    if (!lead.ghlOpportunityId) {
+      const existing = await ghl.findOpportunityByContact(lead.ghlContactId);
+      if (existing.ok && existing.data) {
+        lead.ghlOpportunityId = existing.data.id;
+        changed = true;
+      }
+    }
+
     if (!lead.ghlOpportunityId) {
       const name = lead.fullName || lead.firstName || 'LinkedIn lead';
       const r = await ghl.createOpportunity({ name, pipelineStageId: stageId, contactId: lead.ghlContactId });

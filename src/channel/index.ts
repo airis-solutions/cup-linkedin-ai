@@ -5,6 +5,7 @@ export * from './unipile.js';
 export * from './inbound.js';
 export * from './outbound.js';
 export * from './relations.js';
+export * from './booking.js';
 
 /** Build the Unipile client from env, or null if LinkedIn isn't configured yet. */
 export function createUnipileFromEnv(): UnipileClient | null {

@@ -81,4 +81,20 @@ describe('server routes', () => {
     const r = await route(deps, req('POST', '/webhooks/unipile', { account_id: 'A', chat_id: 'c' }));
     expect(r.status).toBe(401);
   });
+
+  it('GHL booking webhook marks a matching lead booked', async () => {
+    const repo = new InMemoryRepository();
+    const lead = await repo.createLead({ source: 'manual', firstName: 'Chris' });
+    lead.email = 'chris@example.com';
+    lead.stage = 'booking_offered';
+    lead.brain = { ...lead.brain, node: 'send_link' };
+    await repo.saveLead(lead);
+
+    const deps = makeDeps(repo, null);
+    const r = await route(deps, req('POST', '/webhooks/ghl', { email: 'chris@example.com', status: 'confirmed' }));
+
+    expect(r.status).toBe(200);
+    expect((r.json as { booking: { status: string } }).booking.status).toBe('booked');
+    expect((await repo.getLead(lead.id))?.stage).toBe('booked');
+  });
 });

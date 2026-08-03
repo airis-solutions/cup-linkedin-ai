@@ -101,6 +101,17 @@ export class GhlClient {
     return this.request('DELETE', `/contacts/${contactId}`);
   }
 
+  /** Fetch a contact's email/name by id (used when a booking webhook only carries a contactId). */
+  async getContact(contactId: string): Promise<GhlResult<{ email?: string; name?: string }>> {
+    const res = await this.request<{ contact?: { email?: string; contactName?: string; firstName?: string } }>(
+      'GET',
+      `/contacts/${contactId}`,
+    );
+    if (!res.ok) return { ok: false, error: res.error };
+    const c = res.data?.contact;
+    return { ok: true, data: { email: c?.email, name: c?.contactName ?? c?.firstName } };
+  }
+
   /** Create an opportunity in the Leads pipeline at the given stage. */
   async createOpportunity(input: {
     name: string;
@@ -127,6 +138,22 @@ export class GhlClient {
       pipelineId: GHL.pipelineId,
       pipelineStageId,
     });
+  }
+
+  /**
+   * Find an existing opportunity for a contact in the Leads pipeline. Used to adopt an
+   * opportunity that another source already created (e.g. CGP's booking page opens one in
+   * "Sales Call Booked") instead of creating a duplicate on our first sync.
+   */
+  async findOpportunityByContact(contactId: string): Promise<GhlResult<{ id: string; pipelineStageId?: string } | null>> {
+    const qs = `location_id=${encodeURIComponent(this.cfg.locationId)}&contact_id=${encodeURIComponent(contactId)}`;
+    const res = await this.request<{ opportunities?: Array<{ id?: string; pipelineId?: string; pipelineStageId?: string }> }>(
+      'GET',
+      `/opportunities/search?${qs}`,
+    );
+    if (!res.ok) return { ok: false, error: res.error };
+    const match = (res.data?.opportunities ?? []).find((o) => o.pipelineId === GHL.pipelineId && o.id);
+    return { ok: true, data: match?.id ? { id: match.id, pipelineStageId: match.pipelineStageId } : null };
   }
 
   async deleteOpportunity(opportunityId: string): Promise<GhlResult> {
