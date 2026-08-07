@@ -9,7 +9,14 @@ const REQUIRED = [
   'SUPABASE_SERVICE_ROLE_KEY',
 ] as const;
 
-const OPTIONAL = ['UNIPILE_API_KEY', 'UNIPILE_DSN', 'UNIPILE_LINKEDIN_ACCOUNT_ID'] as const;
+// GHL is optional to boot but the sync silently no-ops without both vars, so report them.
+const OPTIONAL = [
+  'UNIPILE_API_KEY',
+  'UNIPILE_DSN',
+  'UNIPILE_LINKEDIN_ACCOUNT_ID',
+  'GHL_PRIVATE_INTEGRATION_TOKEN',
+  'GHL_LOCATION_ID',
+] as const;
 
 const present = (k: string): boolean => Boolean(process.env[k] && process.env[k] !== '');
 
