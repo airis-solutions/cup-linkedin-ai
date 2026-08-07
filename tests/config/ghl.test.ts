@@ -53,7 +53,13 @@ describe('GHL stage mapping', () => {
 describe('booking link prefill', () => {
   it('appends the name as a query param', () => {
     expect(bookingLinkWithName('https://www.crypto-gameplan.com/booking', 'Max Müller')).toBe(
-      'https://www.crypto-gameplan.com/booking?name=Max%20M%C3%BCller',
+      'https://www.crypto-gameplan.com/booking?name=Max%20M%C3%BCller&source=linkedin',
+    );
+  });
+
+  it('keeps the source marker when the base url already carries a query', () => {
+    expect(bookingLinkWithName('https://www.crypto-gameplan.com/booking?ref=x', 'Max')).toBe(
+      'https://www.crypto-gameplan.com/booking?ref=x&name=Max&source=linkedin',
     );
   });
 });

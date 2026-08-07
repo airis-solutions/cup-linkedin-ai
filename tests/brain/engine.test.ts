@@ -92,7 +92,7 @@ describe('happy path through the screen', () => {
   it('email captured -> sends booking link with name pre-filled', () => {
     const d = advance(stateAt('ask_email'), u('answer', { contact: { email: 'max@x.com' } }), vars);
     expect(d.nextNode).toBe('send_link');
-    expect(d.reply).toContain('crypto-gameplan.com/booking?name=Max');
+    expect(d.reply).toContain('crypto-gameplan.com/booking?name=Max&source=linkedin');
     expect(d.contactPatch?.email).toBe('max@x.com');
     expect(d.events).toContain('booking_link_sent');
   });
@@ -100,7 +100,7 @@ describe('happy path through the screen', () => {
   it('no email given -> still sends the link, never blocks the booking', () => {
     const d = advance(stateAt('ask_email'), u('answer'), vars);
     expect(d.nextNode).toBe('send_link');
-    expect(d.reply).toContain('crypto-gameplan.com/booking?name=Max');
+    expect(d.reply).toContain('crypto-gameplan.com/booking?name=Max&source=linkedin');
   });
 });
 

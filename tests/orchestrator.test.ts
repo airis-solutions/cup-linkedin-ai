@@ -55,7 +55,7 @@ describe('orchestrator end-to-end (in-memory)', () => {
     expect(res.node).toBe('ask_email'); // collect email before the link
     res = await handleInbound(deps, lead.id, 'max@example.com');
     expect(res.node).toBe('send_link');
-    expect(res.draft?.body).toContain('https://www.crypto-gameplan.com/booking?name=Max');
+    expect(res.draft?.body).toContain('https://www.crypto-gameplan.com/booking?name=Max&source=linkedin');
 
     const finalLead = await repo.getLead(lead.id);
     expect(finalLead?.qualification.status).toBe('Qualified');

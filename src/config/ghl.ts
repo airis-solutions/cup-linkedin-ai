@@ -83,8 +83,14 @@ export function shouldCreateOpportunity(stage: FunnelStage): boolean {
   );
 }
 
+/**
+ * Attribution marker on every booking link we send. Fabi filters the GHL booking
+ * webhook on it so only LinkedIn bookings leave CGP's system (2026-08-07).
+ */
+export const BOOKING_SOURCE_PARAM = 'source=linkedin';
+
 /** Booking link with the lead's name pre-filled (Fabi: prefill name via ?name=; email/phone self-entered). */
 export function bookingLinkWithName(baseUrl: string, firstName: string): string {
   const sep = baseUrl.includes('?') ? '&' : '?';
-  return `${baseUrl}${sep}name=${encodeURIComponent(firstName)}`;
+  return `${baseUrl}${sep}name=${encodeURIComponent(firstName)}&${BOOKING_SOURCE_PARAM}`;
 }

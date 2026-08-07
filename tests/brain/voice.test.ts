@@ -45,7 +45,7 @@ describe('voice.generateReply', () => {
 
   const LINK: GenerateParams = {
     node: 'send_link',
-    canonical: 'Here you go: https://www.crypto-gameplan.com/booking?name=Max\n\nBook any slot that works for you.',
+    canonical: 'Here you go: https://www.crypto-gameplan.com/booking?name=Max&source=linkedin\n\nBook any slot that works for you.',
     language: 'de',
     firstName: 'Max',
     history: [],
@@ -57,7 +57,7 @@ describe('voice.generateReply', () => {
   });
 
   it('keeps a generated message that includes the exact URL', async () => {
-    const good = 'Stark. Hier rein und einen Slot buchen: https://www.crypto-gameplan.com/booking?name=Max';
+    const good = 'Stark. Hier rein und einen Slot buchen: https://www.crypto-gameplan.com/booking?name=Max&source=linkedin';
     const out = await generateReply(LINK, caller(good));
     expect(out).toBe(good);
   });
