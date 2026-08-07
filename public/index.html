@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>CGP LinkedIn Engine</title>
+<style>
+  :root {
+    color-scheme: light;
+    --plane: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --series: #2a78d6;
+    --track: #e1e0d9;
+    --good: #0ca30c;
+    --warning: #fab219;
+    --critical: #d03b3b;
+    --good-text: #006300;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --plane: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --series: #3987e5;
+      --track: #2c2c2a;
+      --good-text: #0ca30c;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --series: #3987e5;
+    --track: #2c2c2a;
+    --good-text: #0ca30c;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--plane);
+    color: var(--ink);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 64px; }
+
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+
+  .controls { display: flex; gap: 8px; align-items: center; }
+  select, button {
+    font: inherit; font-size: 13px; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--axis); border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  button:hover, select:hover { border-color: var(--muted); }
+
+  section { margin-bottom: 28px; }
+  h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0 0 12px; letter-spacing: 0.02em; text-transform: uppercase; }
+
+  .card { background: var(--surface); border: 1px solid var(--grid); border-radius: 12px; padding: 18px 20px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .kpi { background: var(--surface); border: 1px solid var(--grid); border-radius: 12px; padding: 16px 18px; }
+  .kpi .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .kpi .value { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .kpi .note { font-size: 12px; color: var(--ink-2); margin-top: 4px; }
+
+  /* Status chips — icon + label, never colour alone. */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; background: var(--surface); border: 1px solid var(--grid); border-radius: 999px; padding: 6px 12px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .chip .who { color: var(--ink-2); }
+  .chip .what { font-weight: 600; }
+
+  /* Funnel: one hue, magnitude by length. Terminal stages recede to muted. */
+  .funnel { display: grid; gap: 2px; }
+  .row { display: grid; grid-template-columns: minmax(140px, 190px) 1fr 48px; align-items: center; gap: 12px; padding: 3px 0; }
+  .row .name { font-size: 13px; color: var(--ink-2); }
+  .bartrack { background: var(--track); border-radius: 4px; height: 18px; overflow: hidden; }
+  .bar { height: 100%; background: var(--series); border-radius: 0 4px 4px 0; min-width: 2px; transition: width .3s ease; }
+  .bar.out { background: var(--muted); }
+  .row .n { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .row.zero .name, .row.zero .n { color: var(--muted); font-weight: 400; }
+
+  /* Budget meter: one ratio against a limit. */
+  .meter { background: var(--track); border-radius: 4px; height: 10px; overflow: hidden; margin: 10px 0 6px; }
+  .meter > div { height: 100%; background: var(--series); border-radius: 0 4px 4px 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 9px 0; border-bottom: 1px solid var(--grid); }
+  tr:last-child td { border-bottom: 0; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  td.k { color: var(--ink-2); }
+
+  .gate { max-width: 420px; margin: 80px auto; text-align: center; }
+  .gate input { font: inherit; width: 100%; padding: 10px 12px; border: 1px solid var(--axis); border-radius: 8px; background: var(--surface); color: var(--ink); margin: 12px 0; }
+  .err { color: var(--critical); font-size: 13px; }
+  .hidden { display: none; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 32px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="gate" class="gate hidden">
+    <h1>CGP LinkedIn Engine</h1>
+    <p class="sub">Zugangsschlüssel eingeben.</p>
+    <input id="token" type="password" placeholder="Zugangsschlüssel" autocomplete="current-password" />
+    <button id="unlock">Öffnen</button>
+    <p id="gateErr" class="err"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <header>
+      <h1>CGP LinkedIn Engine</h1>
+      <div class="controls">
+        <select id="days">
+          <option value="7">Letzte 7 Tage</option>
+          <option value="30">Letzte 30 Tage</option>
+          <option value="90">Letzte 90 Tage</option>
+        </select>
+        <button id="reload">Aktualisieren</button>
+      </div>
+    </header>
+    <p class="sub" id="stamp"></p>
+
+    <section>
+      <h2>Systemstatus</h2>
+      <div class="chips" id="status"></div>
+      <div class="card" style="margin-top:12px">
+        <div style="font-size:12px;color:var(--muted)">Aktionen heute</div>
+        <div class="meter"><div id="budgetBar" style="width:0%"></div></div>
+        <div style="font-size:13px;color:var(--ink-2)" id="budgetText"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Gesamt</h2>
+      <div class="kpis" id="kpis"></div>
+    </section>
+
+    <section>
+      <h2>Trichter</h2>
+      <div class="card"><div class="funnel" id="funnel"></div></div>
+    </section>
+
+    <section>
+      <h2 id="periodTitle">Zeitraum</h2>
+      <div class="card"><table id="period"></table></div>
+    </section>
+
+    <section>
+      <h2>Braucht dich</h2>
+      <div class="card"><table id="attention"></table></div>
+    </section>
+
+    <footer id="foot"></footer>
+  </div>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const KEY = 'cgp_dashboard_token';
+let token = localStorage.getItem(KEY) || '';
+
+const nf = new Intl.NumberFormat('de-DE');
+const pct = (v) => (v === null || v === undefined ? '—' : nf.format(v) + ' %');
+const num = (v) => nf.format(v ?? 0);
+
+function showGate(msg) {
+  $('app').classList.add('hidden');
+  $('gate').classList.remove('hidden');
+  $('gateErr').textContent = msg || '';
+}
+
+async function load() {
+  const days = $('days').value;
+  const res = await fetch(`/api/stats?days=${days}`, { headers: { 'x-dashboard-token': token } });
+  if (res.status === 401) { localStorage.removeItem(KEY); showGate('Schlüssel stimmt nicht.'); return; }
+  if (res.status === 503) { showGate('Dashboard ist serverseitig noch nicht freigeschaltet (DASHBOARD_TOKEN fehlt).'); return; }
+  if (!res.ok) { showGate('Fehler beim Laden: ' + res.status); return; }
+  render(await res.json());
+}
+
+function chip(label, ok, goodText, badText) {
+  const color = ok ? 'var(--good)' : 'var(--warning)';
+  return `<span class="chip"><span class="dot" style="background:${color}"></span>
+    <span class="who">${label}</span><span class="what">${ok ? goodText : badText}</span></span>`;
+}
+
+function render(d) {
+  $('gate').classList.add('hidden');
+  $('app').classList.remove('hidden');
+
+  const t = new Date(d.generatedAt);
+  $('stamp').textContent = `Stand ${t.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}`;
+
+  $('status').innerHTML = [
+    chip('Sendefenster', d.system.sendWindowOpen, 'offen', 'geschlossen'),
+    chip('Automatik', !d.system.paused, 'läuft', 'pausiert'),
+    chip('Freigabe', !d.system.approvalRequired, 'automatisch', 'du gibst frei'),
+  ].join('');
+
+  const cap = d.today.actionsCap || 1;
+  $('budgetBar').style.width = Math.min(100, (d.today.actionsUsed / cap) * 100) + '%';
+  $('budgetText').textContent =
+    `${num(d.today.actionsUsed)} von ${num(d.today.actionsCap)} verbraucht · ${num(d.today.actionsLeft)} übrig · Fenster ${d.system.windowLabel} (${d.system.timezone})`;
+
+  const kpis = [
+    { label: 'Anfragen verschickt', value: num(d.totals.invitesSent), note: `${num(d.queue.waitingForInvite)} in der Warteschlange` },
+    { label: 'Annahmequote', value: pct(d.totals.acceptanceRate), note: `${num(d.totals.invitesAccepted)} angenommen` },
+    { label: 'Im Gespräch', value: num(d.totals.inConversation), note: `${num(d.totals.qualified)} qualifiziert` },
+    { label: 'Calls gebucht', value: num(d.totals.booked), note: d.totals.bookingRate === null ? 'noch keine Basis' : `${pct(d.totals.bookingRate)} der Angenommenen` },
+  ];
+  $('kpis').innerHTML = kpis.map((k) => `
+    <div class="kpi"><div class="label">${k.label}</div>
+      <div class="value">${k.value}</div><div class="note">${k.note}</div></div>`).join('');
+
+  const OUT = new Set(['parked', 'disqualified', 'do_not_contact']);
+  const max = Math.max(1, ...d.funnel.map((f) => f.count));
+  $('funnel').innerHTML = d.funnel.map((f) => `
+    <div class="row ${f.count === 0 ? 'zero' : ''}">
+      <span class="name">${f.label}</span>
+      <span class="bartrack"><span class="bar ${OUT.has(f.stage) ? 'out' : ''}" style="width:${(f.count / max) * 100}%"></span></span>
+      <span class="n">${num(f.count)}</span>
+    </div>`).join('');
+
+  $('periodTitle').textContent = `Letzte ${d.period.days} Tage`;
+  const rows = [
+    ['Neue Leads erfasst', num(d.period.newLeads)],
+    ['Verbindungsanfragen raus', num(d.period.invitesSent)],
+    ['Nachrichten verschickt', num(d.period.messagesSent)],
+    ['Antworten erhalten', num(d.period.repliesReceived)],
+    ['Antwortquote', pct(d.period.replyRate)],
+    ['Buchungen', num(d.period.bookings)],
+  ];
+  $('period').innerHTML = rows.map(([k, v]) => `<tr><td class="k">${k}</td><td class="n">${v}</td></tr>`).join('');
+
+  const att = [
+    ['Nachrichten warten auf deine Freigabe', num(d.attention.pendingApprovals)],
+    ['Als Nicht-Interessent aussortiert', num(d.attention.flaggedNonProspects)],
+    ['An einen Menschen eskaliert', num(d.attention.escalations)],
+  ];
+  $('attention').innerHTML = att.map(([k, v]) => `<tr><td class="k">${k}</td><td class="n">${v}</td></tr>`).join('');
+
+  $('foot').textContent = 'Aussortierte und Eskalationen beziehen sich auf den gewählten Zeitraum.';
+}
+
+$('unlock').addEventListener('click', () => {
+  token = $('token').value.trim();
+  if (!token) return;
+  localStorage.setItem(KEY, token);
+  load();
+});
+$('token').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('unlock').click(); });
+$('reload').addEventListener('click', load);
+$('days').addEventListener('change', load);
+
+if (token) load(); else showGate();
+</script>
+</body>
+</html>

@@ -52,6 +52,8 @@ const envSchema = z.object({
   FOLLOWUP_HOURS: z.coerce.number().int().positive().default(24),
   /** Shared secret for the cron endpoint (Vercel sends it as a bearer token). */
   CRON_SECRET: z.string().optional(),
+  /** Access token for the review dashboard. Unset = dashboard disabled (fails closed). */
+  DASHBOARD_TOKEN: z.string().optional(),
   /** Emergency stop: when true the daily cycle does nothing at all. */
   PAUSE_OUTBOUND: z
     .string()

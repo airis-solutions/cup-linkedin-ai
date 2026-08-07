@@ -16,6 +16,7 @@ import {
   type LeadRecord,
   type MessageRecord,
   type MessageStatus,
+  type RawStats,
   type Repository,
 } from './repository.js';
 
@@ -257,6 +258,28 @@ export class SupabaseRepository implements Repository {
     });
     if (error) throw new Error(`reserveDailySends: ${error.message}`);
     return typeof data === 'number' ? data : 0;
+  }
+
+  async dashboardStats(sinceIso: string, day: string): Promise<RawStats> {
+    const { data, error } = await this.sb.rpc('dashboard_stats', { p_since: sinceIso, p_day: day });
+    if (error) throw new Error(`dashboardStats: ${error.message}`);
+    const r = (data ?? {}) as Record<string, unknown>;
+    const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
+    const counts = (v: unknown): Record<string, number> =>
+      v && typeof v === 'object' ? (v as Record<string, number>) : {};
+    return {
+      funnel: counts(r.funnel),
+      queueWaitingForInvite: num(r.queueWaitingForInvite),
+      pendingApprovals: num(r.pendingApprovals),
+      actionsUsedToday: num(r.actionsUsedToday),
+      eventsSince: counts(r.eventsSince),
+      leadsCreatedSince: num(r.leadsCreatedSince),
+      messagesSentSince: num(r.messagesSentSince),
+      repliesSince: num(r.repliesSince),
+      invitesTotal: num(r.invitesTotal),
+      invitesAccepted: num(r.invitesAccepted),
+      bookedTotal: num(r.bookedTotal),
+    };
   }
 
   async sentToday(day: string): Promise<number> {

@@ -10,6 +10,7 @@ import type {
   EventRecord,
   LeadRecord,
   MessageRecord,
+  RawStats,
   Repository,
 } from './repository.js';
 import { emptyQualification } from './repository.js';
@@ -131,6 +132,30 @@ export class InMemoryRepository implements Repository {
 
   async sentToday(day: string): Promise<number> {
     return this.dailySends.get(day) ?? 0;
+  }
+
+  async dashboardStats(sinceIso: string, day: string): Promise<RawStats> {
+    const leads = [...this.leads.values()];
+    const funnel: Record<string, number> = {};
+    for (const l of leads) funnel[l.stage] = (funnel[l.stage] ?? 0) + 1;
+    const eventsSince: Record<string, number> = {};
+    for (const e of this.events.filter((e) => e.occurredAt >= sinceIso)) {
+      eventsSince[e.kind] = (eventsSince[e.kind] ?? 0) + 1;
+    }
+    const invited = leads.filter((l) => l.invitedAt);
+    return {
+      funnel,
+      queueWaitingForInvite: leads.filter((l) => l.stage === 'new' && !l.doNotContact).length,
+      pendingApprovals: this.messages.filter((m) => m.status === 'pending_hitl').length,
+      actionsUsedToday: this.dailySends.get(day) ?? 0,
+      eventsSince,
+      leadsCreatedSince: leads.filter((l) => l.createdAt >= sinceIso).length,
+      messagesSentSince: this.messages.filter((m) => m.direction === 'outbound' && m.status === 'sent' && m.createdAt >= sinceIso).length,
+      repliesSince: this.messages.filter((m) => m.direction === 'inbound' && m.createdAt >= sinceIso).length,
+      invitesTotal: invited.length,
+      invitesAccepted: invited.filter((l) => l.stage !== 'new' && l.stage !== 'invited').length,
+      bookedTotal: leads.filter((l) => l.stage === 'booked').length,
+    };
   }
 
   /** Test helper: all recorded events. */

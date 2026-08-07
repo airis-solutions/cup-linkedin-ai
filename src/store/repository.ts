@@ -126,6 +126,24 @@ export interface Repository {
   reserveDailySends(day: string, limit: number, count: number): Promise<number>;
   /** Sends already used today (for reporting). */
   sentToday(day: string): Promise<number>;
+
+  /** Raw counters for the review dashboard, aggregated in one round trip. */
+  dashboardStats(sinceIso: string, day: string): Promise<RawStats>;
+}
+
+/** Counters as they come out of the store, before any rate/labelling work. */
+export interface RawStats {
+  funnel: Partial<Record<FunnelStage, number>>;
+  queueWaitingForInvite: number;
+  pendingApprovals: number;
+  actionsUsedToday: number;
+  eventsSince: Record<string, number>;
+  leadsCreatedSince: number;
+  messagesSentSince: number;
+  repliesSince: number;
+  invitesTotal: number;
+  invitesAccepted: number;
+  bookedTotal: number;
 }
 
 export function emptyQualification(): Qualification {
