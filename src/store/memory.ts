@@ -18,6 +18,7 @@ export class InMemoryRepository implements Repository {
   private leads = new Map<string, LeadRecord>();
   private messages: MessageRecord[] = [];
   private events: EventRecord[] = [];
+  private dailySends = new Map<string, number>();
 
   async getLead(id: string): Promise<LeadRecord | null> {
     return this.leads.get(id) ?? null;
@@ -99,6 +100,37 @@ export class InMemoryRepository implements Repository {
   async setMessageStatus(messageId: string, status: MessageRecord['status']): Promise<void> {
     const msg = this.messages.find((m) => m.id === messageId);
     if (msg) msg.status = status;
+  }
+
+  async listQueuedForInvite(limit: number): Promise<LeadRecord[]> {
+    return [...this.leads.values()]
+      .filter((l) => l.stage === 'new' && !l.doNotContact)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(0, limit);
+  }
+
+  async listDueForFollowUp(nowIso: string, limit: number): Promise<LeadRecord[]> {
+    return [...this.leads.values()]
+      .filter((l) => !l.doNotContact && l.nextActionAt && l.nextActionAt <= nowIso)
+      .sort((a, b) => (a.nextActionAt ?? '').localeCompare(b.nextActionAt ?? ''))
+      .slice(0, limit);
+  }
+
+  async listApprovedUnsent(limit: number): Promise<MessageRecord[]> {
+    return this.messages
+      .filter((m) => m.direction === 'outbound' && m.status === 'approved')
+      .slice(0, limit);
+  }
+
+  async reserveDailySends(day: string, limit: number, count: number): Promise<number> {
+    const used = this.dailySends.get(day) ?? 0;
+    const granted = Math.max(0, Math.min(count, limit - used));
+    this.dailySends.set(day, used + granted);
+    return granted;
+  }
+
+  async sentToday(day: string): Promise<number> {
+    return this.dailySends.get(day) ?? 0;
   }
 
   /** Test helper: all recorded events. */

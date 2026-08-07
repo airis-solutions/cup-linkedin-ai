@@ -38,6 +38,9 @@ function rowToLead(r: Row): LeadRecord {
     doNotContact: Boolean(r.do_not_contact),
     ghlContactId: (r.ghl_contact_id as string) ?? undefined,
     ghlOpportunityId: (r.ghl_opportunity_id as string) ?? undefined,
+    nextActionAt: (r.next_action_at as string) ?? undefined,
+    lastOutboundAt: (r.last_outbound_at as string) ?? undefined,
+    invitedAt: (r.invited_at as string) ?? undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -134,6 +137,9 @@ export class SupabaseRepository implements Repository {
         do_not_contact: lead.doNotContact,
         ghl_contact_id: lead.ghlContactId,
         ghl_opportunity_id: lead.ghlOpportunityId,
+        next_action_at: lead.nextActionAt ?? null,
+        last_outbound_at: lead.lastOutboundAt ?? null,
+        invited_at: lead.invitedAt ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', lead.id);
@@ -202,6 +208,65 @@ export class SupabaseRepository implements Repository {
   async setMessageStatus(messageId: string, status: MessageStatus): Promise<void> {
     const { error } = await this.sb.from('messages').update({ status }).eq('id', messageId);
     if (error) throw new Error(`setMessageStatus: ${error.message}`);
+  }
+
+  // ── Daily cycle ────────────────────────────────────────────────
+
+  async listQueuedForInvite(limit: number): Promise<LeadRecord[]> {
+    const { data, error } = await this.sb
+      .from('leads')
+      .select('*')
+      .eq('stage', 'new')
+      .eq('do_not_contact', false)
+      .order('created_at', { ascending: true })
+      .limit(limit);
+    if (error) throw new Error(`listQueuedForInvite: ${error.message}`);
+    return (data ?? []).map(rowToLead);
+  }
+
+  async listDueForFollowUp(nowIso: string, limit: number): Promise<LeadRecord[]> {
+    const { data, error } = await this.sb
+      .from('leads')
+      .select('*')
+      .eq('do_not_contact', false)
+      .not('next_action_at', 'is', null)
+      .lte('next_action_at', nowIso)
+      .order('next_action_at', { ascending: true })
+      .limit(limit);
+    if (error) throw new Error(`listDueForFollowUp: ${error.message}`);
+    return (data ?? []).map(rowToLead);
+  }
+
+  async listApprovedUnsent(limit: number): Promise<MessageRecord[]> {
+    const { data, error } = await this.sb
+      .from('messages')
+      .select('*')
+      .eq('direction', 'outbound')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: true })
+      .limit(limit);
+    if (error) throw new Error(`listApprovedUnsent: ${error.message}`);
+    return (data ?? []).map(rowToMessage);
+  }
+
+  async reserveDailySends(day: string, limit: number, count: number): Promise<number> {
+    const { data, error } = await this.sb.rpc('reserve_daily_sends', {
+      p_day: day,
+      p_limit: limit,
+      p_count: count,
+    });
+    if (error) throw new Error(`reserveDailySends: ${error.message}`);
+    return typeof data === 'number' ? data : 0;
+  }
+
+  async sentToday(day: string): Promise<number> {
+    const { data, error } = await this.sb
+      .from('daily_send_counter')
+      .select('sent_count')
+      .eq('day', day)
+      .maybeSingle();
+    if (error) throw new Error(`sentToday: ${error.message}`);
+    return (data?.sent_count as number) ?? 0;
   }
 }
 

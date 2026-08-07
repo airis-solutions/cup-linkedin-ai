@@ -2,5 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "buildCommand": "echo 'serverless functions only — no build step'",
-  "outputDirectory": "public"
+  "outputDirectory": "public",
+  "functions": {
+    "api/cron/daily.ts": { "maxDuration": 300 }
+  },
+  "crons": [{ "path": "/api/cron/daily", "schedule": "0 8,11,14,16 * * *" }]
 }

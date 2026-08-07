@@ -15,6 +15,10 @@ const WALKTHROUGH_LINK = 'https://crypto-gameplan.com';
 
 let cached: AppDeps | undefined;
 
+export function appDeps(): AppDeps {
+  return deps();
+}
+
 function deps(): AppDeps {
   if (cached) return cached;
   const env = loadEnv();
@@ -31,6 +35,7 @@ function deps(): AppDeps {
     unipile: createUnipileFromEnv(),
     ghl: createGhlFromEnv(),
     webhookSecret: env.WEBHOOK_SHARED_SECRET,
+    followUpHours: env.FOLLOWUP_HOURS,
   };
   return cached;
 }

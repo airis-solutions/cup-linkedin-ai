@@ -24,6 +24,7 @@ export type EventKind =
   | 'lead_created'
   | 'reply_received'
   | 'opener_sent'
+  | 'invite_sent'
   | 'booking_confirmed';
 
 export interface LeadRecord {
@@ -47,6 +48,12 @@ export interface LeadRecord {
   ghlContactId?: string;
   /** GHL opportunity id once a qualified lead is in the pipeline. */
   ghlOpportunityId?: string;
+  /** When the daily cycle should touch this lead again (follow-up clock). Null = never. */
+  nextActionAt?: string;
+  /** When we last sent this lead a message (audit + pacing). */
+  lastOutboundAt?: string;
+  /** When the connection request went out (cold outbound). */
+  invitedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -104,6 +111,21 @@ export interface Repository {
   messagesForLead(leadId: string): Promise<MessageRecord[]>;
   /** Update an outbound message's status (e.g. approved -> sent). */
   setMessageStatus(messageId: string, status: MessageStatus): Promise<void>;
+
+  // ── Daily cycle ────────────────────────────────────────────────
+  /** Cold leads imported but not yet invited, oldest first. */
+  listQueuedForInvite(limit: number): Promise<LeadRecord[]>;
+  /** Leads whose follow-up clock has come due. */
+  listDueForFollowUp(nowIso: string, limit: number): Promise<LeadRecord[]>;
+  /** Approved outbound messages that have not been dispatched yet. */
+  listApprovedUnsent(limit: number): Promise<MessageRecord[]>;
+  /**
+   * Reserve `count` sends against the day's budget and return how many were actually
+   * granted. Atomic per day so two overlapping runs can never exceed the cap.
+   */
+  reserveDailySends(day: string, limit: number, count: number): Promise<number>;
+  /** Sends already used today (for reporting). */
+  sentToday(day: string): Promise<number>;
 }
 
 export function emptyQualification(): Qualification {

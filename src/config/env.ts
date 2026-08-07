@@ -34,6 +34,30 @@ const envSchema = z.object({
   /** Trigger A: max cold connection requests per import run. Start low, ramp slowly
    * (LinkedIn caps invites ~100-200/week). Defaults to LINKEDIN_DMS_PER_DAY_LIMIT. */
   COLD_INVITE_DAILY_CAP: z.coerce.number().int().positive().optional(),
+
+  // ── Daily cycle (the autonomous clock) ──────────────────────────
+  /** Hard ceiling on ALL outbound LinkedIn actions per day (invites + messages). */
+  DAILY_ACTION_CAP: z.coerce.number().int().positive().default(20),
+  /** Invites per cycle run, so one run never dumps the whole day at once. */
+  INVITES_PER_RUN: z.coerce.number().int().positive().default(5),
+  /** Sending window in SEND_TIMEZONE — nothing leaves outside it. */
+  SEND_WINDOW_START_HOUR: z.coerce.number().int().min(0).max(23).default(9),
+  SEND_WINDOW_END_HOUR: z.coerce.number().int().min(1).max(24).default(18),
+  SEND_TIMEZONE: z.string().default('Europe/Berlin'),
+  SEND_ON_WEEKENDS: z
+    .string()
+    .default('false')
+    .transform((v) => v.toLowerCase() === 'true'),
+  /** Hours of silence before the follow-up engine touches a lead. */
+  FOLLOWUP_HOURS: z.coerce.number().int().positive().default(24),
+  /** Shared secret for the cron endpoint (Vercel sends it as a bearer token). */
+  CRON_SECRET: z.string().optional(),
+  /** Emergency stop: when true the daily cycle does nothing at all. */
+  PAUSE_OUTBOUND: z
+    .string()
+    .default('false')
+    .transform((v) => v.toLowerCase() === 'true'),
+
   HITL_REQUIRED_BEFORE_SEND: z
     .string()
     .default('true')

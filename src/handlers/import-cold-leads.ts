@@ -47,6 +47,12 @@ export interface ImportDeps {
 export interface ImportOptions {
   /** Max connection requests to send this run (the daily cap). */
   cap: number;
+  /**
+   * Import into the queue without inviting. The daily cycle then drips the invites out
+   * inside the day's budget and the sending window. This is the default for big lists —
+   * inviting straight from the import is what blows through LinkedIn's limits.
+   */
+  queueOnly?: boolean;
   /** Resolve + report only; create no leads and send no invites. */
   dryRun?: boolean;
   /** Pause (ms) after each invite, to space requests out. Default: none. */
@@ -59,6 +65,8 @@ export interface ImportResult {
   total: number;
   /** Invites sent (or, in dry-run, that would be sent). */
   invited: number;
+  /** Leads added to the queue for the daily cycle to invite later. */
+  queued: number;
   /** Skipped as already-known (dedupe) or because the cap was reached. */
   skipped: number;
   /** Rows we couldn't process (no public identifier, resolve failed, invite failed). */
@@ -74,10 +82,19 @@ export async function importColdLeads(
   opts: ImportOptions,
 ): Promise<ImportResult> {
   const sleep = opts.sleep ?? realSleep;
-  const result: ImportResult = { total: rows.length, invited: 0, skipped: 0, failed: 0, dryRun: Boolean(opts.dryRun) };
+  const result: ImportResult = {
+    total: rows.length,
+    invited: 0,
+    queued: 0,
+    skipped: 0,
+    failed: 0,
+    dryRun: Boolean(opts.dryRun),
+  };
 
   for (const row of rows) {
-    if (result.invited >= opts.cap) {
+    // Queued imports are not rate-limited: nothing leaves the building until the daily
+    // cycle picks them up, and that is where the real cap lives.
+    if (!opts.queueOnly && result.invited >= opts.cap) {
       result.skipped += 1; // cap reached — leave the rest for the next run
       continue;
     }
@@ -103,7 +120,8 @@ export async function importColdLeads(
     }
 
     if (opts.dryRun) {
-      result.invited += 1; // would invite
+      if (opts.queueOnly) result.queued += 1;
+      else result.invited += 1; // would invite
       continue;
     }
 
@@ -116,6 +134,13 @@ export async function importColdLeads(
     lead.linkedinProviderId = resolved.providerId;
     // Set the opener language from their country now (no inbound to detect it from yet).
     lead.brain = { ...lead.brain, language: languageFromLocation(resolved.location) };
+
+    if (opts.queueOnly) {
+      await deps.repo.saveLead(lead); // stays at stage 'new' — the daily cycle invites it
+      await deps.repo.appendEvent({ leadId: lead.id, kind: 'lead_created', payload: { source: 'cold_outbound' } });
+      result.queued += 1;
+      continue;
+    }
 
     const invite = await deps.unipile.sendInvitation(resolved.providerId);
     if (!invite.ok) {

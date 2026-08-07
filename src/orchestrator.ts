@@ -16,7 +16,14 @@ import type { ClassifyParams } from './brain/classify.js';
 import type { GenerateReply, GenerateTurn } from './brain/voice.js';
 import type { GhlClient } from './channel/ghl.js';
 import { syncLeadToGhl } from './channel/ghl-sync.js';
-import type { BrainState, FlowVars, InboundUnderstanding, Language, ReplyIntent } from './brain/types.js';
+import type {
+  BrainState,
+  FlowVars,
+  FlowNode,
+  InboundUnderstanding,
+  Language,
+  ReplyIntent,
+} from './brain/types.js';
 import type { LeadRecord, MessageRecord, Repository } from './store/repository.js';
 import { logger } from './lib/logger.js';
 
@@ -30,7 +37,24 @@ export interface OrchestratorDeps {
   hitlRequired: boolean;
   /** Optional GHL client; when set, leads are synced to the CRM best-effort. */
   ghl?: GhlClient | null;
+  /** Hours of silence before the follow-up clock touches a lead again. Default 24. */
+  followUpHours?: number;
+  /** Injectable clock, so the scheduling logic is testable. */
+  now?: () => Date;
 }
+
+/**
+ * Nodes where the conversation is over — the follow-up clock must stop.
+ * Deliberately keyed on the NODE, not the stage: a value touch persists as stage
+ * "parked" but is very much not the end, it wants another touch in 72h.
+ */
+const TERMINAL_NODES = new Set<FlowNode>([
+  'parked',
+  'booked',
+  'not_prospect',
+  'disqualified',
+  'soft_close_low_capital',
+]);
 
 export interface TurnResult {
   understanding?: InboundUnderstanding;
@@ -125,6 +149,17 @@ async function commitDecision(
     language: ctx.language,
   };
   lead.stage = decision.nextStage;
+
+  // Move the follow-up clock on EVERY turn. Without this a lead picked up by the daily
+  // cycle would stay due forever and get re-touched on every run.
+  const now = (deps.now ?? (() => new Date()))();
+  const hours = decision.parkUntilHours ?? deps.followUpHours ?? 24;
+  if (TERMINAL_NODES.has(decision.nextNode) || lead.doNotContact || hours <= 0) {
+    lead.nextActionAt = undefined;
+  } else {
+    lead.nextActionAt = new Date(now.getTime() + hours * 3_600_000).toISOString();
+  }
+  if (draft) lead.lastOutboundAt = now.toISOString();
 
   for (const kind of decision.events) {
     await deps.repo.appendEvent({ leadId: lead.id, kind, payload: { node: decision.nextNode } });
