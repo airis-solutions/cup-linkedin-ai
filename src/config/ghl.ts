@@ -72,6 +72,22 @@ export function ghlStageId(stage: FunnelStage): string | null {
   }
 }
 
+/**
+ * Progress order of the Leads-pipeline stages. Used to make opportunity updates
+ * forward-only: CGP's own booking page can advance a contact to "Sales Call Booked"
+ * before our booking webhook tells us, and syncing our older stage would undo that.
+ * Unknown / missing stages rank lowest so we never move an opportunity we can't place.
+ */
+const STAGE_RANK: Record<string, number> = {
+  [GHL.stages.contacted]: 1,
+  [GHL.stages.qualified]: 2,
+  [GHL.stages.salesCallBooked]: 3,
+};
+
+export function stageRank(stageId: string | undefined | null): number {
+  return (stageId && STAGE_RANK[stageId]) || 0;
+}
+
 /** Only qualified leads become an Opportunity in the Leads pipeline. */
 export function shouldCreateOpportunity(stage: FunnelStage): boolean {
   return (

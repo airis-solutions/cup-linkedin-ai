@@ -8,7 +8,7 @@
  * Best-effort: callers run this in a try/catch so a GHL hiccup never breaks the chat.
  */
 import type { GhlClient, UpsertContactInput } from './ghl.js';
-import { ghlCustomFields, ghlStageId, shouldCreateOpportunity } from '../config/ghl.js';
+import { ghlCustomFields, ghlStageId, shouldCreateOpportunity, stageRank } from '../config/ghl.js';
 import type { LeadRecord } from '../store/repository.js';
 import { logger } from '../lib/logger.js';
 
@@ -58,14 +58,14 @@ export async function syncLeadToGhl(ghl: GhlClient, lead: LeadRecord): Promise<{
   // 2) Opportunity — only for qualified+ leads (Fabi: unqualified = contact only).
   const stageId = ghlStageId(lead.stage);
   if (shouldCreateOpportunity(lead.stage) && stageId && lead.ghlContactId) {
-    // Adopt an opportunity another source already opened for this contact (e.g. CGP's
-    // booking page creates one in "Sales Call Booked") so we never create a duplicate.
-    if (!lead.ghlOpportunityId) {
-      const existing = await ghl.findOpportunityByContact(lead.ghlContactId);
-      if (existing.ok && existing.data) {
-        lead.ghlOpportunityId = existing.data.id;
-        changed = true;
-      }
+    // Read the live opportunity first: it tells us both whether another source already
+    // opened one (CGP's booking page does, in "Sales Call Booked") and where it stands.
+    const existing = await ghl.findOpportunityByContact(lead.ghlContactId);
+
+    // Adopt it rather than creating a duplicate.
+    if (!lead.ghlOpportunityId && existing.ok && existing.data) {
+      lead.ghlOpportunityId = existing.data.id;
+      changed = true;
     }
 
     if (!lead.ghlOpportunityId) {
@@ -77,9 +77,15 @@ export async function syncLeadToGhl(ghl: GhlClient, lead: LeadRecord): Promise<{
       } else {
         logger.warn({ leadId: lead.id, error: r.error }, 'ghl.opportunity_create_failed');
       }
+    } else if (existing.ok && existing.data?.id === lead.ghlOpportunityId) {
+      // Forward-only: a booking that reached GHL before our webhook must not be undone.
+      // Skipping a forward move is harmless (the next sync retries); a backward move is not.
+      if (stageRank(stageId) > stageRank(existing.data.pipelineStageId)) {
+        const r = await ghl.updateOpportunityStage(lead.ghlOpportunityId, stageId);
+        if (!r.ok) logger.warn({ leadId: lead.id, error: r.error }, 'ghl.opportunity_stage_failed');
+      }
     } else {
-      const r = await ghl.updateOpportunityStage(lead.ghlOpportunityId, stageId);
-      if (!r.ok) logger.warn({ leadId: lead.id, error: r.error }, 'ghl.opportunity_stage_failed');
+      logger.warn({ leadId: lead.id, error: existing.error }, 'ghl.opportunity_stage_unknown');
     }
   }
 

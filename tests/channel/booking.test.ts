@@ -77,7 +77,8 @@ describe('handleGhlAppointmentWebhook', () => {
     // Enriched the contact and adopted the existing opportunity (no duplicate).
     expect(calls.upsert).toBe(1);
     expect(lead?.ghlOpportunityId).toBe('O_EXISTING');
-    expect(calls.stageUpdates).toEqual([{ id: 'O_EXISTING', stage: GHL.stages.salesCallBooked }]);
+    // The booking page already put it in "Sales Call Booked" — no redundant stage write.
+    expect(calls.stageUpdates).toEqual([]);
   });
 
   it('is idempotent on repeated delivery', async () => {

@@ -73,7 +73,12 @@ describe('syncLeadToGhl', () => {
   });
 
   it('updates by id (no new contact/opportunity) when ids already exist', async () => {
-    const { ghl, calls } = fakeGhl();
+    const { ghl, calls } = fakeGhl({
+      findOpportunityByContact: async () => ({
+        ok: true as const,
+        data: { id: 'O1', pipelineStageId: GHL.stages.qualified },
+      }),
+    });
     const lead = makeLead({ stage: 'booked', ghlContactId: 'C1', ghlOpportunityId: 'O1' });
     const { changed } = await syncLeadToGhl(ghl, lead);
 
@@ -98,7 +103,35 @@ describe('syncLeadToGhl', () => {
     expect(changed).toBe(true);
     expect(calls.createOpp).toHaveLength(0);
     expect(lead.ghlOpportunityId).toBe('EXISTING');
-    expect(calls.stageUpdates).toEqual([{ id: 'EXISTING', stage: GHL.stages.salesCallBooked }]);
+    // Already in the target stage — nothing to move.
+    expect(calls.stageUpdates).toEqual([]);
+  });
+
+  it('never moves an opportunity backwards', async () => {
+    // The prospect booked via CGP's page (opportunity already in "Sales Call Booked")
+    // but our booking webhook hasn't fired yet, so our lead is still "booking_offered".
+    const { ghl, calls } = fakeGhl({
+      findOpportunityByContact: async () => ({
+        ok: true as const,
+        data: { id: 'EXISTING', pipelineStageId: GHL.stages.salesCallBooked },
+      }),
+    });
+    const lead = makeLead({ stage: 'booking_offered', ghlContactId: 'C1' });
+    await syncLeadToGhl(ghl, lead);
+
+    expect(lead.ghlOpportunityId).toBe('EXISTING');
+    expect(calls.stageUpdates).toEqual([]);
+  });
+
+  it('skips the stage update when the live opportunity cannot be read', async () => {
+    const { ghl, calls } = fakeGhl({
+      findOpportunityByContact: async () => ({ ok: false as const, error: 'boom' }),
+    });
+    const lead = makeLead({ stage: 'booked', ghlContactId: 'C1', ghlOpportunityId: 'O1' });
+    await syncLeadToGhl(ghl, lead);
+
+    expect(calls.stageUpdates).toEqual([]);
+    expect(calls.createOpp).toHaveLength(0);
   });
 
   it('syncs an unqualified lead as a contact only (no opportunity)', async () => {
