@@ -58,6 +58,16 @@ export function opener(vars: FlowVars): BrainDecision {
   return decide('welcome', fill(FIXED_COPY.welcome ?? '', vars), {}, []);
 }
 
+/**
+ * First inbound from someone we never opened with. Welcome-first, EXCEPT for the
+ * not-a-prospect exit: agency pitches, recruiters and spam arrive as a first message
+ * by definition, so greeting them warmly and qualifying them is exactly wrong.
+ */
+export function openerFor(u: InboundUnderstanding, vars: FlowVars): BrainDecision {
+  if (u.intent === 'not_a_prospect') return notProspect(vars);
+  return opener(vars);
+}
+
 /** Process one inbound message at the current node. */
 export function advance(state: BrainState, u: InboundUnderstanding, vars: FlowVars): BrainDecision {
   const { intent } = u;

@@ -74,6 +74,30 @@ describe('orchestrator end-to-end (in-memory)', () => {
     expect(kinds.filter((k) => k === 'reply_received').length).toBe(7);
   });
 
+  it('routes an unsolicited pitch out instead of welcoming it (first inbound, no opener yet)', async () => {
+    // Agency pitches and spam always arrive as a first message, so the not-a-prospect
+    // exit has to apply before the welcome-first opener.
+    const repo = new InMemoryRepository();
+    const deps: OrchestratorDeps = { ...makeDeps(repo), classify: async () => ({ intent: 'not_a_prospect' }) };
+    const lead = await repo.createLead({ source: 'manual', firstName: 'Steven' });
+
+    const res = await handleInbound(deps, lead.id, 'We run outbound marketing for you, book a call here');
+
+    expect(res.node).toBe('not_prospect');
+    const after = await repo.getLead(lead.id);
+    expect(after?.stage).toBe('do_not_contact');
+    expect(repo.allEvents().map((e) => e.kind)).toContain('flagged_non_prospect');
+  });
+
+  it('still welcomes a genuine first-contact lead', async () => {
+    const repo = new InMemoryRepository();
+    const deps: OrchestratorDeps = { ...makeDeps(repo), classify: async () => ({ intent: 'other' }) };
+    const lead = await repo.createLead({ source: 'manual', firstName: 'Max' });
+
+    const res = await handleInbound(deps, lead.id, 'hey, saw your post about the system');
+    expect(res.node).toBe('welcome');
+  });
+
   it('with HITL off, clean copy is auto-approved (not sent yet)', async () => {
     const repo = new InMemoryRepository();
     const deps = makeDeps(repo, false);

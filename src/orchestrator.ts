@@ -10,7 +10,7 @@
  * injected, so the orchestrator runs fully in tests with an in-memory store, a stubbed
  * classifier, and an identity voice stub (no network, no LinkedIn, no Claude).
  */
-import { advance, onSilence, opener } from './brain/engine.js';
+import { advance, onSilence, opener, openerFor } from './brain/engine.js';
 import { scanMessage } from './brain/guard.js';
 import type { ClassifyParams } from './brain/classify.js';
 import type { GenerateReply, GenerateTurn } from './brain/voice.js';
@@ -179,10 +179,11 @@ export async function handleInbound(
   const language: Language = understanding.language ?? lead.brain.language ?? 'en';
 
   // Welcome-first: a lead who messaged us cold (no opener sent yet) gets the warm opener
-  // before the qualification screen — never a question fired straight at them.
+  // before the qualification screen — never a question fired straight at them. Pitches and
+  // spam are the exception; openerFor() routes those out instead of greeting them.
   const decision = lead.brain.openerSent
     ? advance(lead.brain, understanding, deps.vars(lead))
-    : opener(deps.vars(lead));
+    : openerFor(understanding, deps.vars(lead));
 
   const ctx: TurnContext = { language, history, inbound: inboundText, intent: understanding.intent };
   const draft = await commitDecision(deps, lead, decision, ctx);
