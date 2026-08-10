@@ -101,15 +101,27 @@ export class GhlClient {
     return this.request('DELETE', `/contacts/${contactId}`);
   }
 
-  /** Fetch a contact's email/name by id (used when a booking webhook only carries a contactId). */
-  async getContact(contactId: string): Promise<GhlResult<{ email?: string; name?: string }>> {
-    const res = await this.request<{ contact?: { email?: string; contactName?: string; firstName?: string } }>(
-      'GET',
-      `/contacts/${contactId}`,
-    );
+  /**
+   * Fetch a contact by id (used when a booking webhook only carries a contactId, and to
+   * verify that custom-field writes actually landed — GHL drops unknown field ids silently).
+   */
+  async getContact(
+    contactId: string,
+  ): Promise<GhlResult<{ email?: string; name?: string; customFields: { id: string; value: string }[] }>> {
+    const res = await this.request<{
+      contact?: {
+        email?: string;
+        contactName?: string;
+        firstName?: string;
+        customFields?: { id?: string; value?: unknown }[];
+      };
+    }>('GET', `/contacts/${contactId}`);
     if (!res.ok) return { ok: false, error: res.error };
     const c = res.data?.contact;
-    return { ok: true, data: { email: c?.email, name: c?.contactName ?? c?.firstName } };
+    const customFields = (c?.customFields ?? [])
+      .filter((f): f is { id: string; value: unknown } => typeof f.id === 'string')
+      .map((f) => ({ id: f.id, value: typeof f.value === 'string' ? f.value : String(f.value ?? '') }));
+    return { ok: true, data: { email: c?.email, name: c?.contactName ?? c?.firstName, customFields } };
   }
 
   /** Create an opportunity in the Leads pipeline at the given stage. */

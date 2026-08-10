@@ -21,11 +21,11 @@ export const GHL = {
     salesCallBooked: '78b20f1a-5eac-44e3-8940-196040fd804f',
   },
   fields: {
-    experienceLevel: 'qMJ7YXmnzlfAzhbTb7Co',
+    experienceLevel: 'qMJ7YXmnzIfAzhbTb7Co',
     holdsAssets: 'QJyT3viRQVqkZ3M68h3p',
     portfolioValue: 'Na2n3SWlxaBRmM14Qde9',
     biggestChallenge: 'P7uxfY2c4xq5IvHxfZco',
-    desiredOutcome: 'QpEwZr6lSTigVkl8zl0W',
+    desiredOutcome: 'QpEwZr6ISTigVkl8zl0W',
     qualificationStatus: 'KOPVe1h9qtdLNLHMhEMK',
     customerType: 'GiMHD7htLkcjiBjFD5BE',
   },
