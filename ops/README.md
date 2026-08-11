@@ -11,21 +11,23 @@ Das System schickt zwei Arten von Meldungen an eine Webhook-Adresse:
 Die Trennung ist Absicht: Robin soll die Fälle sehen, in denen ein Kunde auf ihn wartet —
 nicht, dass die KI beinahe etwas Falsches gesagt hätte. Das würde nur Vertrauen kosten.
 
-## Einrichten
+## Stand (eingerichtet am 11.08.2026)
 
-1. In n8n oben rechts **⋯ → Import from File**, `n8n-alerts-workflow.json` auswählen
-2. **Telegram-Zugangsdaten** hinterlegen (beide Telegram-Knoten nutzen dieselben):
-   - In Telegram `@BotFather` anschreiben → `/newbot` → Token kopieren
-   - In n8n: Credentials → New → Telegram API → Token einfügen
-3. **Chat-IDs eintragen**, die beiden Platzhalter ersetzen:
-   - `CHAT_ID_NUR_FELIX` — Bot anschreiben, dann
-     `https://api.telegram.org/bot<TOKEN>/getUpdates` aufrufen, `chat.id` ablesen
-   - `CHAT_ID_ROBIN_UND_FELIX` — Gruppe anlegen, Bot hinzufügen, eine Nachricht schreiben,
-     dieselbe URL aufrufen. Gruppen-IDs beginnen mit `-`
-4. Workflow **aktivieren**
-5. Die **Production-URL** des Webhook-Knotens kopieren
-6. In Vercel unter Settings → Environments → Production eintragen:
-   `ALERT_WEBHOOK_URL` = diese URL, dann **Redeploy**
+Läuft bereits in n8n — Workflow **„CGP LinkedIn AI — Alarme"**, ID `58PF1PwJjZ1r0G0H`, aktiv.
+
+- Telegram-Bot: **@airisassistent_bot** (bestehender Airis-Bot, gehört Christians Konto)
+- Ziel beider Zweige: Telegram-Gruppe **„Airis"**
+- Die Webhook-Adresse enthält einen zufälligen Pfad, damit niemand Fremdes Nachrichten in
+  die Gruppe schicken kann. Sie steht in der lokalen `.env` unter `ALERT_WEBHOOK_URL` und
+  in Vercel — **nicht ins Repo committen.**
+
+Die Datei `n8n-alerts-workflow.json` bleibt als Vorlage liegen, falls der Workflow neu
+aufgesetzt werden muss.
+
+### Wenn Robin dazukommen soll
+
+Im n8n-Workflow beim Knoten **„Eskalation → Gruppe"** die Chat-ID auf eine neue Gruppe mit
+Robin ändern. „Technik → Gruppe" bleibt wie es ist. Kein Deploy nötig.
 
 ## Testen
 
