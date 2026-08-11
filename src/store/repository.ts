@@ -25,6 +25,7 @@ export type EventKind =
   | 'reply_received'
   | 'opener_sent'
   | 'invite_sent'
+  | 'compliance_blocked'
   | 'booking_confirmed';
 
 export interface LeadRecord {

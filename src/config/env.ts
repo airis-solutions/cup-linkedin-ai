@@ -54,6 +54,11 @@ const envSchema = z.object({
   CRON_SECRET: z.string().optional(),
   /** Access token for the review dashboard. Unset = dashboard disabled (fails closed). */
   DASHBOARD_TOKEN: z.string().optional(),
+  /**
+   * Where escalations and compliance hits are sent (n8n / Slack / Discord / Make).
+   * Unset = alerts are only logged, never delivered.
+   */
+  ALERT_WEBHOOK_URL: z.string().url().optional(),
   /** Emergency stop: when true the daily cycle does nothing at all. */
   PAUSE_OUTBOUND: z
     .string()

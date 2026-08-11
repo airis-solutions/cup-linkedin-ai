@@ -11,7 +11,7 @@
  * classifier, and an identity voice stub (no network, no LinkedIn, no Claude).
  */
 import { advance, onSilence, opener, openerFor } from './brain/engine.js';
-import { scanMessage } from './brain/guard.js';
+import { hasComplianceViolation, scanMessage } from './brain/guard.js';
 import type { ClassifyParams } from './brain/classify.js';
 import type { GenerateReply, GenerateTurn } from './brain/voice.js';
 import type { GhlClient } from './channel/ghl.js';
@@ -26,6 +26,7 @@ import type {
 } from './brain/types.js';
 import type { LeadRecord, MessageRecord, Repository } from './store/repository.js';
 import { logger } from './lib/logger.js';
+import { notify } from './lib/notify.js';
 
 export interface OrchestratorDeps {
   repo: Repository;
@@ -98,7 +99,7 @@ async function persistOutbound(
   node: string,
 ): Promise<MessageRecord> {
   const guard = scanMessage(reply);
-  return deps.repo.appendMessage({
+  const message = await deps.repo.appendMessage({
     leadId,
     direction: 'outbound',
     // A guard failure forces human review even if HITL is otherwise off.
@@ -107,6 +108,26 @@ async function persistOutbound(
     node,
     guardFlagged: !guard.ok,
   });
+
+  // A compliance hit is a different animal from a style slip: Robin is not a licensed
+  // adviser, so someone has to look at it rather than find it in a log later.
+  if (hasComplianceViolation(guard)) {
+    const hits = guard.violations.filter((v) => v.rule.startsWith('compliance-'));
+    await deps.repo.appendEvent({
+      leadId,
+      kind: 'compliance_blocked',
+      payload: { node, violations: hits.map((v) => ({ rule: v.rule, match: v.match })) },
+    });
+    void notify({
+      kind: 'compliance',
+      title: 'Entwurf wegen Compliance zurückgehalten',
+      detail: `${hits.map((v) => `${v.rule} ("${v.match}")`).join(', ')}\n\n"${reply.slice(0, 300)}"`,
+      leadId,
+      context: { node },
+    });
+  }
+
+  return message;
 }
 
 async function commitDecision(
@@ -166,6 +187,13 @@ async function commitDecision(
   }
   if (decision.flagForHuman) {
     await deps.repo.appendEvent({ leadId: lead.id, kind: 'hitl_requested', payload: { reason: 'borderline' } });
+    void notify({
+      kind: 'escalation',
+      title: `Lead braucht einen Menschen (${decision.nextNode})`,
+      detail: ctx.inbound ? `Er schrieb: "${ctx.inbound.slice(0, 300)}"` : undefined,
+      leadId: lead.id,
+      context: { node: decision.nextNode, stage: decision.nextStage },
+    });
   }
   await deps.repo.saveLead(lead);
 
