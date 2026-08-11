@@ -1,0 +1,115 @@
+{
+  "name": "CGP LinkedIn AI — Alarme",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cgp-alerts",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Alarm rein",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "a1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.body.kind }}",
+              "rightValue": "escalation",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Lead-Sache oder System-Sache?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "CHAT_ID_ROBIN_UND_FELIX",
+        "text": "={{ $json.body.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "An Robin + Felix",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [460, -100],
+      "notes": "Eskalationen: ein Lead braucht einen echten Menschen. Robin muss das sehen."
+    },
+    {
+      "parameters": {
+        "chatId": "CHAT_ID_NUR_FELIX",
+        "text": "={{ $json.body.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "Nur an Felix",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [460, 100],
+      "notes": "Compliance- und Systemmeldungen. Technik, die Robin nicht sehen muss."
+    }
+  ],
+  "connections": {
+    "Alarm rein": {
+      "main": [
+        [
+          {
+            "node": "Lead-Sache oder System-Sache?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead-Sache oder System-Sache?": {
+      "main": [
+        [
+          {
+            "node": "An Robin + Felix",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nur an Felix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
