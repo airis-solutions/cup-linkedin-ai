@@ -16,6 +16,8 @@ const OPTIONAL = [
   'UNIPILE_LINKEDIN_ACCOUNT_ID',
   'GHL_PRIVATE_INTEGRATION_TOKEN',
   'GHL_LOCATION_ID',
+  // Without this, escalations and compliance hits are only logged, never delivered.
+  'ALERT_WEBHOOK_URL',
 ] as const;
 
 const present = (k: string): boolean => Boolean(process.env[k] && process.env[k] !== '');
