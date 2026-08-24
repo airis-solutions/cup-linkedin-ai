@@ -28,9 +28,16 @@ export const GHL = {
     desiredOutcome: 'QpEwZr6ISTigVkl8zl0W',
     qualificationStatus: 'KOPVe1h9qtdLNLHMhEMK',
     customerType: 'GiMHD7htLkcjiBjFD5BE',
+    leadSource: 'JGclxGXdFKByHYnLk4ZV',
   },
   /** Only "Lead" is relevant for the AI-sourced contacts. */
   customerTypeValue: 'Lead',
+  /**
+   * "Lead Source" dropdown value for everything this system produces (Fabi 2026-08-24).
+   * Set on the contact alongside the src:linkedin tag so CGP can attribute a booking to
+   * LinkedIn without a marker on the booking link.
+   */
+  leadSourceValue: 'LinkedIn',
 } as const;
 
 export interface GhlCustomField {
@@ -40,7 +47,10 @@ export interface GhlCustomField {
 
 /** Build the GHL custom-field payload from a qualification record (omits empty fields). */
 export function ghlCustomFields(q: Qualification): GhlCustomField[] {
-  const out: GhlCustomField[] = [{ id: GHL.fields.customerType, value: GHL.customerTypeValue }];
+  const out: GhlCustomField[] = [
+    { id: GHL.fields.customerType, value: GHL.customerTypeValue },
+    { id: GHL.fields.leadSource, value: GHL.leadSourceValue },
+  ];
   if (q.experienceLevel) out.push({ id: GHL.fields.experienceLevel, value: q.experienceLevel });
   if (typeof q.holdsAssets === 'boolean')
     out.push({ id: GHL.fields.holdsAssets, value: q.holdsAssets ? 'Yes' : 'No' });
@@ -102,6 +112,11 @@ export function shouldCreateOpportunity(stage: FunnelStage): boolean {
 /**
  * Attribution marker on every booking link we send. Fabi filters the GHL booking
  * webhook on it so only LinkedIn bookings leave CGP's system (2026-08-07).
+ *
+ * Kept deliberately (2026-08-24): Fabi now attributes via the contact instead (src:linkedin
+ * tag + Lead Source field, both set above), but his published workflow may still filter on
+ * this parameter. Dropping it before that is confirmed would silence the booking webhook,
+ * which fails invisibly — a redundant query param costs nothing, a missing one costs bookings.
  */
 export const BOOKING_SOURCE_PARAM = 'source=linkedin';
 

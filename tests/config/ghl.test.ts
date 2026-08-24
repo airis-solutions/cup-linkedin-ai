@@ -24,13 +24,21 @@ describe('GHL field mapping', () => {
     expect(byId[GHL.fields.portfolioValue]).toBe('$100,000 - $250,000');
     expect(byId[GHL.fields.qualificationStatus]).toBe('Qualified');
     expect(byId[GHL.fields.customerType]).toBe('Lead');
+    expect(byId[GHL.fields.leadSource]).toBe('LinkedIn');
   });
 
   it('omits fields that are not set', () => {
     const fields = ghlCustomFields({ status: 'Not Reviewed' });
-    // Only customer type + qualification status are always present.
+    // Only customer type, lead source + qualification status are always present.
     expect(fields.find((f) => f.id === GHL.fields.experienceLevel)).toBeUndefined();
     expect(fields.find((f) => f.id === GHL.fields.qualificationStatus)?.value).toBe('Not Reviewed');
+  });
+
+  // Attribution is what tells CGP a booking came from us. It rides on the contact now
+  // (Fabi 2026-08-24), so an unattributed lead must be impossible, not just unlikely.
+  it('always marks the lead source, even with nothing qualified yet', () => {
+    const fields = ghlCustomFields({ status: 'Not Reviewed' });
+    expect(fields.find((f) => f.id === GHL.fields.leadSource)?.value).toBe('LinkedIn');
   });
 });
 
