@@ -59,8 +59,9 @@ export interface CycleResult {
 const realSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 export const defaultCycleOptions = (over: Partial<CycleOptions> = {}): CycleOptions => ({
-  dailyCap: 20,
-  invitesPerRun: 5,
+  // Ramp-up values — see env.ts for why these are low. Overridable per run.
+  dailyCap: 15,
+  invitesPerRun: 2,
   windowStartHour: 9,
   windowEndHour: 18,
   timezone: 'Europe/Berlin',

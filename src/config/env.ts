@@ -36,10 +36,20 @@ const envSchema = z.object({
   COLD_INVITE_DAILY_CAP: z.coerce.number().int().positive().optional(),
 
   // ── Daily cycle (the autonomous clock) ──────────────────────────
-  /** Hard ceiling on ALL outbound LinkedIn actions per day (invites + messages). */
-  DAILY_ACTION_CAP: z.coerce.number().int().positive().default(20),
-  /** Invites per cycle run, so one run never dumps the whole day at once. */
-  INVITES_PER_RUN: z.coerce.number().int().positive().default(5),
+  /**
+   * Hard ceiling on ALL outbound LinkedIn actions per day (invites + messages).
+   * Deliberately low for the ramp-up: this runs on Robin's personal account, and a
+   * restriction there costs more than a slow week. Raise it once the acceptance rate
+   * shows the targeting is sound.
+   */
+  DAILY_ACTION_CAP: z.coerce.number().int().positive().default(15),
+  /**
+   * Invites per cycle run, so one run never dumps the whole day at once. Connection
+   * requests to strangers are what actually triggers LinkedIn restrictions, so this is
+   * the number that matters: at 4 cron runs a day it caps cold invites around 8/day and
+   * leaves the rest of the budget for replies in live conversations.
+   */
+  INVITES_PER_RUN: z.coerce.number().int().positive().default(2),
   /** Sending window in SEND_TIMEZONE — nothing leaves outside it. */
   SEND_WINDOW_START_HOUR: z.coerce.number().int().min(0).max(23).default(9),
   SEND_WINDOW_END_HOUR: z.coerce.number().int().min(1).max(24).default(18),
