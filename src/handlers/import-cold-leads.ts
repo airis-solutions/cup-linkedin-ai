@@ -12,7 +12,7 @@
  */
 import type { Repository } from '../store/repository.js';
 import type { Language } from '../brain/types.js';
-import { publicIdentifierFromUrl, type UnipileClient } from '../channel/unipile.js';
+import { publicIdentifierFromUrl, type ResolveResult, type UnipileClient } from '../channel/unipile.js';
 import { logger } from '../lib/logger.js';
 
 /** DACH country names (English + native) as they appear in LinkedIn location strings. */
@@ -37,6 +37,14 @@ export interface ColdLeadRow {
   linkedinUrl: string;
   firstName?: string;
   fullName?: string;
+  /**
+   * Provider id, when the list came from our own LinkedIn search (handlers/search-leads.ts).
+   * Present means we can skip the resolve call — one less request per lead, and one less way
+   * for a row to fail. A third-party CSV export won't have it; those still resolve.
+   */
+  providerId?: string;
+  /** LinkedIn location string, same source as `providerId`. Decides the opener language. */
+  location?: string;
 }
 
 export interface ImportDeps {
@@ -100,7 +108,7 @@ export async function importColdLeads(
     }
 
     const identifier = publicIdentifierFromUrl(row.linkedinUrl);
-    if (!identifier) {
+    if (!identifier && !row.providerId) {
       result.failed += 1;
       logger.warn({ url: row.linkedinUrl }, 'import.no_public_identifier');
       continue;
@@ -112,7 +120,9 @@ export async function importColdLeads(
       continue;
     }
 
-    const resolved = await deps.unipile.resolveProfile(identifier);
+    const resolved: ResolveResult = row.providerId
+      ? { ok: true, providerId: row.providerId, name: row.fullName, location: row.location }
+      : await deps.unipile.resolveProfile(identifier as string);
     if (!resolved.ok || !resolved.providerId) {
       result.failed += 1;
       logger.warn({ identifier, error: resolved.error }, 'import.resolve_failed');

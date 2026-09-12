@@ -11,6 +11,9 @@ dist/
 coverage/
 .vitest-cache/
 
+# Built lead lists — real people's names and profile URLs, never in the repo
+lists/
+
 .vscode/
 .idea/
 *.swp

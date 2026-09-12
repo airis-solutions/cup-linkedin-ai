@@ -201,3 +201,125 @@ describe('parseInbound', () => {
     expect(r.fromSelf).toBe(true);
   });
 });
+
+describe('UnipileClient.searchPeople', () => {
+  it('POSTs a classic people search with the filters and returns normalised profiles', async () => {
+    const captured: Captured[] = [];
+    const client = new UnipileClient({
+      ...cfgBase,
+      fetchImpl: stub(captured, {
+        json: {
+          items: [
+            {
+              id: 'ACoAA1',
+              name: 'Maxim Stanciu',
+              public_profile_url: 'https://www.linkedin.com/in/mxcmxc',
+              public_identifier: 'mxcmxc',
+              headline: 'Engineering Director',
+              location: 'Zurich, Switzerland',
+              network_distance: 'DISTANCE_2',
+            },
+          ],
+          cursor: 'next123',
+        },
+      }),
+    });
+
+    const res = await client.searchPeople(
+      { keywords: 'director', location: ['106693272'], industry: ['4'], networkDistance: [2] },
+      { limit: 25 },
+    );
+
+    expect(res.ok).toBe(true);
+    expect(res.cursor).toBe('next123');
+    expect(res.items[0]).toEqual({
+      providerId: 'ACoAA1',
+      name: 'Maxim Stanciu',
+      profileUrl: 'https://www.linkedin.com/in/mxcmxc',
+      publicIdentifier: 'mxcmxc',
+      headline: 'Engineering Director',
+      location: 'Zurich, Switzerland',
+      networkDistance: 'DISTANCE_2',
+    });
+
+    expect(captured[0].method).toBe('POST');
+    expect(captured[0].url).toContain('/api/v1/linkedin/search?');
+    expect(captured[0].url).toContain('account_id=ACC1');
+    expect(captured[0].url).toContain('limit=25');
+    const body = JSON.parse(captured[0].body as string);
+    expect(body).toMatchObject({
+      api: 'classic',
+      category: 'people',
+      keywords: 'director',
+      location: ['106693272'],
+      industry: ['4'],
+      network_distance: [2],
+    });
+  });
+
+  it('defaults to 2nd-degree, the only distance worth inviting', async () => {
+    const captured: Captured[] = [];
+    const client = new UnipileClient({ ...cfgBase, fetchImpl: stub(captured, { json: { items: [] } }) });
+    await client.searchPeople({ keywords: 'cto' });
+
+    expect(JSON.parse(captured[0].body as string).network_distance).toEqual([2]);
+  });
+
+  it('passes the cursor on for the next page', async () => {
+    const captured: Captured[] = [];
+    const client = new UnipileClient({ ...cfgBase, fetchImpl: stub(captured, { json: { items: [] } }) });
+    await client.searchPeople({}, { cursor: 'abc==' });
+
+    expect(captured[0].url).toContain('cursor=abc%3D%3D');
+  });
+
+  it('drops items without a provider id rather than passing junk on', async () => {
+    const client = new UnipileClient({
+      ...cfgBase,
+      fetchImpl: stub([], { json: { items: [{ name: 'No Id' }, { id: 'ACoAA2', name: 'Has Id' }] } }),
+    });
+    const res = await client.searchPeople({});
+
+    expect(res.items.map((i) => i.providerId)).toEqual(['ACoAA2']);
+  });
+
+  it('surfaces the 403 you get without a Sales Navigator subscription', async () => {
+    const client = new UnipileClient({
+      ...cfgBase,
+      fetchImpl: stub([], { ok: false, status: 403, text: 'feature_not_subscribed' }),
+    });
+    const res = await client.searchPeople({});
+
+    expect(res.ok).toBe(false);
+    expect(res.items).toEqual([]);
+    expect(res.error).toContain('403');
+  });
+});
+
+describe('UnipileClient.searchParameters', () => {
+  it('resolves a filter name to LinkedIn ids', async () => {
+    const captured: Captured[] = [];
+    const client = new UnipileClient({
+      ...cfgBase,
+      fetchImpl: stub(captured, {
+        json: { items: [{ title: 'Switzerland', id: '106693272' }, { title: 'Zurich, Switzerland', id: '102436504' }] },
+      }),
+    });
+
+    const res = await client.searchParameters('LOCATION', 'Switzerland');
+
+    expect(res.ok).toBe(true);
+    expect(res.items[0]).toEqual({ id: '106693272', title: 'Switzerland' });
+    expect(captured[0].method).toBe('GET');
+    expect(captured[0].url).toContain('type=LOCATION');
+    expect(captured[0].url).toContain('keywords=Switzerland');
+  });
+
+  it('reports an empty match instead of guessing', async () => {
+    const client = new UnipileClient({ ...cfgBase, fetchImpl: stub([], { json: { items: [] } }) });
+    const res = await client.searchParameters('INDUSTRY', 'nonsense');
+
+    expect(res.ok).toBe(true);
+    expect(res.items).toEqual([]);
+  });
+});

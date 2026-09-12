@@ -133,3 +133,32 @@ describe('languageFromLocation', () => {
     }
   });
 });
+
+describe('importColdLeads with a list from our own LinkedIn search', () => {
+  it('uses the provider id from the row and never calls resolve', async () => {
+    const repo = new InMemoryRepository();
+    const { unipile, resolves, invites } = stubUnipile();
+
+    const res = await importColdLeads(
+      { repo, unipile },
+      [row('robin', { providerId: 'ACoAA9', fullName: 'Robin Ritter', location: 'Munich, Germany' })],
+      { cap: 10 },
+    );
+
+    expect(res).toMatchObject({ total: 1, invited: 1, failed: 0 });
+    expect(resolves).toEqual([]); // the whole point: one request less per lead
+    expect(invites).toEqual(['ACoAA9']);
+    const lead = await repo.findLeadByLinkedinUrl('https://www.linkedin.com/in/robin');
+    expect(lead?.linkedinProviderId).toBe('ACoAA9');
+    expect(lead?.brain.language).toBe('de'); // language still comes from the location
+  });
+
+  it('still resolves rows from a third-party export that carry no provider id', async () => {
+    const repo = new InMemoryRepository();
+    const { unipile, resolves } = stubUnipile();
+
+    await importColdLeads({ repo, unipile }, [row('felix')], { cap: 10 });
+
+    expect(resolves).toEqual(['felix']);
+  });
+});

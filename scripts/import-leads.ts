@@ -39,6 +39,9 @@ function toRows(csv: string): ColdLeadRow[] {
       linkedinUrl,
       firstName: pick(r, ['firstname', 'first name', 'first']),
       fullName: pick(r, ['fullname', 'full name', 'name']),
+      // Present when the list came from `npm run search:leads` — lets us skip the resolve call.
+      providerId: pick(r, ['providerid', 'provider id', 'provider_id']),
+      location: pick(r, ['location']),
     });
   }
   return rows;

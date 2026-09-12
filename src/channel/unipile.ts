@@ -8,6 +8,8 @@
  *   first DM    -> POST /chats                       (account_id, attendees_ids, text)
  *   resolve     -> GET  /users/{identifier}          (public identifier -> provider_id)
  *   invite      -> POST /users/invite                (account_id, provider_id) [Trigger A]
+ *   search      -> POST /linkedin/search             (people search -> list building)
+ *   filter ids  -> GET  /linkedin/search/parameters  ("Switzerland" -> 106693272)
  *
  * `fetchImpl` is injectable so the request building is unit-testable without network.
  */
@@ -41,6 +43,47 @@ export interface ResolveResult {
   /** Free-text location, e.g. "Stuttgart, Baden-Württemberg, Germany" — used to pick the language. */
   location?: string;
   error?: string;
+}
+
+/**
+ * Filters for a LinkedIn people search. `location` and `industry` are LinkedIn's own numeric
+ * ids, not free text — resolve them with `searchParameters` first.
+ */
+export interface PeopleSearchFilters {
+  keywords?: string;
+  location?: string[];
+  industry?: string[];
+  /**
+   * Network degrees to include. Default is 2nd degree only: 1st are already connected (nothing
+   * to invite) and 3rd-degree invites often need an email address, so they mostly fail.
+   */
+  networkDistance?: number[];
+}
+
+/** One person from a search result. `providerId` is what invites and DMs are addressed to. */
+export interface SearchProfile {
+  providerId: string;
+  name?: string;
+  profileUrl?: string;
+  publicIdentifier?: string;
+  headline?: string;
+  location?: string;
+  /** LinkedIn's own label, e.g. "DISTANCE_2". */
+  networkDistance?: string;
+}
+
+export interface SearchPageResult {
+  ok: boolean;
+  items: SearchProfile[];
+  /** Pass back into the next call to page on. Absent once the results run out. */
+  cursor?: string;
+  error?: string;
+}
+
+/** One resolved filter value, e.g. { id: "106693272", title: "Switzerland" }. */
+export interface SearchParameter {
+  id: string;
+  title: string;
 }
 
 export class UnipileClient {
@@ -145,6 +188,106 @@ export class UnipileClient {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   }
+
+  /**
+   * Run a LinkedIn people search through Robin's session — this is how cold lists get built.
+   *
+   * Deliberately the `classic` search, not `sales_navigator`: the connected account has no
+   * Sales Navigator subscription, and Unipile answers that api with 403 feature_not_subscribed.
+   * Classic has fewer filters but needs no extra subscription and no second tool on the account.
+   *
+   * Results already carry the provider id, so a list built this way skips `resolveProfile`.
+   */
+  async searchPeople(
+    filters: PeopleSearchFilters,
+    opts: { cursor?: string; limit?: number } = {},
+  ): Promise<SearchPageResult> {
+    const qs = new URLSearchParams({ account_id: this.cfg.accountId });
+    if (opts.limit) qs.set('limit', String(opts.limit));
+    if (opts.cursor) qs.set('cursor', opts.cursor);
+
+    const body: Record<string, unknown> = { api: 'classic', category: 'people' };
+    if (filters.keywords) body.keywords = filters.keywords;
+    if (filters.location?.length) body.location = filters.location;
+    if (filters.industry?.length) body.industry = filters.industry;
+    body.network_distance = filters.networkDistance?.length ? filters.networkDistance : [2];
+
+    try {
+      const res = await this.fetch(this.url(`/linkedin/search?${qs.toString()}`), {
+        method: 'POST',
+        headers: { ...this.headers(), 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        return { ok: false, items: [], error: `Unipile ${res.status}: ${(await res.text()).slice(0, 200)}` };
+      }
+      const d = (await res.json()) as { items?: unknown[]; cursor?: string };
+      return { ok: true, items: (d.items ?? []).map(toSearchProfile).filter(isProfile), cursor: d.cursor || undefined };
+    } catch (e) {
+      return { ok: false, items: [], error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
+   * Turn a filter name into LinkedIn's id for it ("Switzerland" -> "106693272"). Searches take
+   * ids only, so every location/industry filter goes through here first.
+   */
+  async searchParameters(
+    type: 'LOCATION' | 'INDUSTRY',
+    keywords: string,
+    limit = 5,
+  ): Promise<{ ok: boolean; items: SearchParameter[]; error?: string }> {
+    const qs = new URLSearchParams({
+      account_id: this.cfg.accountId,
+      type,
+      keywords,
+      limit: String(limit),
+    });
+    try {
+      const res = await this.fetch(this.url(`/linkedin/search/parameters?${qs.toString()}`), {
+        method: 'GET',
+        headers: this.headers(),
+      });
+      if (!res.ok) {
+        return { ok: false, items: [], error: `Unipile ${res.status}: ${(await res.text()).slice(0, 200)}` };
+      }
+      const d = (await res.json()) as { items?: { id?: string; title?: string }[] };
+      const items = (d.items ?? [])
+        .filter((i): i is { id: string; title: string } => Boolean(i.id && i.title))
+        .map((i) => ({ id: String(i.id), title: i.title }));
+      return { ok: true, items };
+    } catch (e) {
+      return { ok: false, items: [], error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+}
+
+/** Map one raw search item to our shape; items without a provider id are unusable. */
+function toSearchProfile(raw: unknown): SearchProfile | undefined {
+  const r = raw as {
+    id?: string;
+    name?: string;
+    profile_url?: string;
+    public_profile_url?: string;
+    public_identifier?: string;
+    headline?: string;
+    location?: string;
+    network_distance?: string;
+  };
+  if (!r?.id) return undefined;
+  return {
+    providerId: r.id,
+    name: r.name?.trim() || undefined,
+    profileUrl: r.public_profile_url || r.profile_url || undefined,
+    publicIdentifier: r.public_identifier || undefined,
+    headline: r.headline?.trim() || undefined,
+    location: r.location?.trim() || undefined,
+    networkDistance: r.network_distance || undefined,
+  };
+}
+
+function isProfile(p: SearchProfile | undefined): p is SearchProfile {
+  return p !== undefined;
 }
 
 /** Shape of an incoming-message webhook from Unipile (the fields we use). */
