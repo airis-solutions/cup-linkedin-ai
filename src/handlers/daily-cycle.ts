@@ -2,9 +2,17 @@
  * The daily cycle — the clock the system was missing.
  *
  * One run does three things, in this order and always inside the day's budget:
- *   1. drip connection requests to queued cold leads (Trigger A, at a human pace)
- *   2. work the follow-up clock (24h value touch / 72h booking reminder / park)
- *   3. dispatch approved-but-unsent messages
+ *   1. work the follow-up clock (24h value touch / 72h booking reminder / park) — drafts only
+ *   2. dispatch approved-but-unsent messages
+ *   3. drip connection requests to queued cold leads (Trigger A, at a human pace)
+ *
+ * The order is the priority order, and it matters once the cold queue is full: people already
+ * in a conversation come before new acquisition. Invites ran first until 2026-09-12, which
+ * meant a full queue could eat the day's budget and leave someone mid-qualification waiting
+ * for an answer while we introduced ourselves to strangers.
+ *
+ * Follow-ups lead because they cost no budget — they only produce drafts — so putting them
+ * first lets a draft created this run go out in the same run's dispatch step.
  *
  * Everything is bounded by a single shared daily budget reserved atomically in the DB,
  * so two overlapping runs can never blow through LinkedIn's limits. Outside the sending
@@ -150,15 +158,8 @@ export async function runDailyCycle(deps: CycleDeps, options: Partial<CycleOptio
     first = false;
   };
 
-  // 1) Drip connection requests to the cold queue.
-  const queued = await deps.repo.listQueuedForInvite(opts.invitesPerRun);
-  for (const lead of queued) {
-    if ((await deps.repo.reserveDailySends(day, opts.dailyCap, 1)) === 0) break;
-    await pace();
-    if (await inviteOne(deps, lead, now.toISOString())) result.invited += 1;
-  }
-
-  // 2) Work the follow-up clock. These produce drafts; whether they go out is HITL's call.
+  // 1) Work the follow-up clock. These produce drafts and cost no budget; whether they go out
+  //    is HITL's call. First, so a draft made now can still be dispatched in step 2.
   const due = await deps.repo.listDueForFollowUp(now.toISOString(), opts.dailyCap);
   for (const lead of due) {
     try {
@@ -170,7 +171,8 @@ export async function runDailyCycle(deps: CycleDeps, options: Partial<CycleOptio
     }
   }
 
-  // 3) Dispatch anything already approved (this is what makes HITL-off actually send).
+  // 2) Dispatch anything already approved (this is what makes HITL-off actually send).
+  //    Ahead of invites on purpose: an open conversation outranks a stranger.
   const approved = await deps.repo.listApprovedUnsent(opts.dailyCap);
   const leadIds = [...new Set(approved.map((m) => m.leadId))];
   for (const leadId of leadIds) {
@@ -178,6 +180,14 @@ export async function runDailyCycle(deps: CycleDeps, options: Partial<CycleOptio
     await pace();
     const sent = await dispatchApprovedForLead({ repo: deps.repo, unipile: deps.unipile }, leadId);
     result.dispatched += sent.sent;
+  }
+
+  // 3) Drip connection requests to the cold queue, with whatever budget is left.
+  const queued = await deps.repo.listQueuedForInvite(opts.invitesPerRun);
+  for (const lead of queued) {
+    if ((await deps.repo.reserveDailySends(day, opts.dailyCap, 1)) === 0) break;
+    await pace();
+    if (await inviteOne(deps, lead, now.toISOString())) result.invited += 1;
   }
 
   result.budgetRemaining = Math.max(0, opts.dailyCap - (await deps.repo.sentToday(day)));

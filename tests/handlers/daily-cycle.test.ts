@@ -143,3 +143,53 @@ describe('runDailyCycle', () => {
     expect(fake.invites).toEqual([]);
   });
 });
+
+describe('priority when the budget is tight', () => {
+  const opts = { invitesPerRun: 5, jitterMs: () => 0, sleep: async () => {} };
+
+  /** A lead mid-conversation with an approved reply waiting to go out. */
+  async function leadWithApprovedReply(repo: InMemoryRepository, text: string): Promise<LeadRecord> {
+    const lead = await repo.createLead({ source: 'cold_outbound', firstName: 'Anna' });
+    lead.stage = 'qualifying';
+    lead.unipileChatId = 'chat-open';
+    lead.brain = { ...lead.brain, node: 'q2', openerSent: true };
+    await repo.saveLead(lead);
+    await repo.appendMessage({ leadId: lead.id, direction: 'outbound', status: 'approved', body: text });
+    return lead;
+  }
+
+  it('answers an open conversation before introducing itself to strangers', async () => {
+    const repo = new InMemoryRepository();
+    const fake: Fake = { invites: [], sent: [] };
+    await leadWithApprovedReply(repo, 'Antwort im laufenden Chat');
+    for (const p of ['p1', 'p2', 'p3']) await queueColdLead(repo, p);
+
+    // Budget for exactly one action: the conversation must win it.
+    const res = await runDailyCycle(makeDeps(repo, TUESDAY_10, fake), {
+      ...opts,
+      now: () => TUESDAY_10,
+      dailyCap: 1,
+    });
+
+    expect(res.dispatched).toBe(1);
+    expect(fake.sent).toEqual(['Antwort im laufenden Chat']);
+    expect(res.invited).toBe(0);
+    expect(fake.invites).toEqual([]);
+  });
+
+  it('still invites with whatever budget the conversations leave over', async () => {
+    const repo = new InMemoryRepository();
+    const fake: Fake = { invites: [], sent: [] };
+    await leadWithApprovedReply(repo, 'Antwort');
+    for (const p of ['p1', 'p2', 'p3']) await queueColdLead(repo, p);
+
+    const res = await runDailyCycle(makeDeps(repo, TUESDAY_10, fake), {
+      ...opts,
+      now: () => TUESDAY_10,
+      dailyCap: 3,
+    });
+
+    expect(res.dispatched).toBe(1);
+    expect(res.invited).toBe(2); // 3 budget − 1 reply
+  });
+});
