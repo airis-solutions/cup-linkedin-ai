@@ -12,20 +12,33 @@ import type { PeopleSearchFilters, SearchProfile, UnipileClient } from '../chann
 import { logger } from '../lib/logger.js';
 
 /**
- * Headlines that disqualify a profile outright, per docs/business/general-info/icp.md:
- * people who do crypto or finance *for a living* are the wrong buyer — they already have a
- * framework and a strong opinion.
+ * Signals that disqualify a profile outright, per docs/business/general-info/icp.md: people who
+ * do crypto or finance *for a living* are the wrong buyer — they already have a framework and a
+ * strong opinion.
  *
- * Deliberately narrow. A bare "investor" is NOT on this list: a tech founder who angel-invests
- * is a good lead, and excluding the word would cost more real prospects than it saves. The
- * phrases here name a profession, not an interest.
+ * Matched against name AND headline. The name matters: a first run turned up "Manthan Crypto",
+ * whose headline said only "Co Founder at Coinccino".
+ *
+ * Deliberately narrow on one point: a bare "investor" is NOT here. A tech founder who
+ * angel-invests is a good lead, and the word would cost more real prospects than it saves.
+ *
+ * These rules cannot catch a crypto company by its name alone — "Founder @ Polygon",
+ * "MyEtherWallet", "ZKsync Foundation" all read as ordinary tech. That is what the human pass
+ * over the CSV is for; the rules handle the clear-cut cases, not the judgement calls.
  */
-export const DEFAULT_HEADLINE_EXCLUSIONS: RegExp[] = [
-  /\b(crypto|bitcoin|blockchain|web3|defi|nft|altcoin)\b/i,
-  /\b(trader|trading|day.?trading)\b/i,
-  /\b(venture capital|private equity|hedge fund)\b/i,
+export const DEFAULT_EXCLUSIONS: RegExp[] = [
+  // Crypto as a profession
+  /\b(crypto|bitcoin|blockchain|web ?3|defi|nft|altcoin)\b/i,
+  /\b(tokenomics|token|wallet|staking|on-?chain|digital assets?)\b/i,
+  // Trading as a profession (plural included — "Firing bad Traders" slipped through once)
+  /\b(traders?|trading|day.?trading|scalper)\b/i,
+  // Finance as a profession
+  /\b(venture capital|private equity|hedge fund|family office)\b/i,
   /\b(asset manage|wealth manage|portfolio manager|fund manager)/i,
-  /\b(investment bank|investment manage)/i,
+  /\b(investment bank|investment manage|investor relations)/i,
+  /\b(cfo|cfa)\b/i,
+  /\bfinance (director|manager|lead|head)\b/i,
+  /\bfintech\b/i,
   /\b(financial (advisor|adviser|planner|consultant))\b/i,
   /\b(finanzberater|verm(ö|oe)gensberater|anlageberater|versicherungsmakler)\b/i,
   /\b(insurance broker|banker)\b/i,
@@ -55,8 +68,8 @@ export interface SearchLeadsOptions {
   maxPages?: number;
   /** Results per request. Default 50. */
   pageSize?: number;
-  /** Headline rules that disqualify a profile. Defaults to the ICP list; pass [] to keep all. */
-  excludeHeadline?: RegExp[];
+  /** Rules that disqualify a profile, matched on name + headline. Pass [] to keep everything. */
+  exclude?: RegExp[];
   /** Pause (ms) between pages, to stay gentle on the session. */
   delayMs?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -95,7 +108,7 @@ export async function searchLeads(
   opts: SearchLeadsOptions,
 ): Promise<SearchLeadsResult> {
   const sleep = opts.sleep ?? realSleep;
-  const exclusions = opts.excludeHeadline ?? DEFAULT_HEADLINE_EXCLUSIONS;
+  const exclusions = opts.exclude ?? DEFAULT_EXCLUSIONS;
   const maxPages = opts.maxPages ?? 20;
   const pageSize = opts.pageSize ?? 50;
 
@@ -133,7 +146,8 @@ export async function searchLeads(
       }
       seen.add(p.providerId);
 
-      if (p.headline && exclusions.some((re) => re.test(p.headline as string))) {
+      const scanned = `${p.name ?? ''} ${p.headline ?? ''}`.trim();
+      if (scanned && exclusions.some((re) => re.test(scanned))) {
         result.excluded += 1;
         continue;
       }

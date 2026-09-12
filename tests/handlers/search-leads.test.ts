@@ -1,4 +1,4 @@
-import { searchLeads, DEFAULT_HEADLINE_EXCLUSIONS } from '../../src/handlers/search-leads.js';
+import { searchLeads, DEFAULT_EXCLUSIONS } from '../../src/handlers/search-leads.js';
 import type { PeopleSearchFilters, SearchPageResult, SearchProfile } from '../../src/channel/unipile.js';
 import type { LeadRecord } from '../../src/store/repository.js';
 
@@ -97,6 +97,56 @@ describe('searchLeads', () => {
     expect(res.excluded).toBe(4);
   });
 
+  it('catches the real-world escapes from the first live run', async () => {
+    const unipile = fakeUnipile([
+      [
+        // The name carries the signal, the headline does not.
+        profile(1, { name: 'Manthan Crypto', headline: 'Co Founder at Coinccino' }),
+        // Plural slipped past an earlier \btrader\b rule.
+        profile(2, { headline: 'Firing bad Traders' }),
+        profile(3, { headline: 'Head Digital Assets / Director' }),
+        profile(4, { headline: 'CFO | Finance Director | Strategic Transformation' }),
+        profile(5, { headline: 'MBA | Director of Investor Relations' }),
+        profile(6, { headline: 'Founder & CEO | Fintech Startup' }),
+      ],
+    ]);
+    const res = await searchLeads({ repo: fakeRepo(), unipile }, { filters: {}, target: 10, ...noSleep });
+
+    expect(res.candidates).toEqual([]);
+    expect(res.excluded).toBe(6);
+  });
+
+  it('does NOT catch a crypto company hiding in a name — that is the human pass, by design', async () => {
+    const unipile = fakeUnipile([
+      [
+        profile(1, { headline: 'Founder @ Polygon' }),
+        profile(2, { headline: 'Head of Business Relations at MyEtherWallet' }),
+        profile(3, { headline: 'Start-Up Gründer chwallet.ch' }),
+      ],
+    ]);
+    const res = await searchLeads({ repo: fakeRepo(), unipile }, { filters: {}, target: 10, ...noSleep });
+
+    // All three are crypto companies and all three survive the rules. Documented, not accepted:
+    // whoever reviews the CSV has to recognise them.
+    expect(res.candidates).toHaveLength(3);
+  });
+
+  it('leaves the ordinary senior tech people alone', async () => {
+    const keep = [
+      'Managing Director at Computer Rock (Schweiz) AG',
+      'CTO @ Interact Software',
+      'Co-founder, CEO at a logistics startup',
+      'Head of Product | Engineering Lead',
+      'Geschäftsführer / CEO - Founder & Shareholder',
+      'Senior Director',
+    ];
+    const unipile = fakeUnipile([keep.map((headline, i) => profile(i + 1, { headline }))]);
+    const res = await searchLeads({ repo: fakeRepo(), unipile }, { filters: {}, target: 20, ...noSleep });
+
+    expect(res.candidates).toHaveLength(keep.length);
+    expect(res.excluded).toBe(0);
+  });
+
   it('keeps a founder who merely invests — "investor" alone is not a disqualifier', async () => {
     const unipile = fakeUnipile([[profile(1, { headline: 'Technologist | Engineer | Investor' })]]);
     const res = await searchLeads(
@@ -167,10 +217,10 @@ describe('searchLeads', () => {
     const unipile = fakeUnipile([[profile(1, { headline: 'Crypto trader' })]]);
     const res = await searchLeads(
       { repo: fakeRepo(), unipile },
-      { filters: {}, target: 5, excludeHeadline: [], ...noSleep },
+      { filters: {}, target: 5, exclude: [], ...noSleep },
     );
 
     expect(res.candidates).toHaveLength(1);
-    expect(DEFAULT_HEADLINE_EXCLUSIONS.length).toBeGreaterThan(0);
+    expect(DEFAULT_EXCLUSIONS.length).toBeGreaterThan(0);
   });
 });

@@ -15,7 +15,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createSupabaseRepoFromEnv } from '../src/store/supabase.js';
 import { createUnipileFromEnv } from '../src/channel/index.js';
-import { searchLeads, DEFAULT_HEADLINE_EXCLUSIONS, type SearchCandidate } from '../src/handlers/search-leads.js';
+import { searchLeads, DEFAULT_EXCLUSIONS, type SearchCandidate } from '../src/handlers/search-leads.js';
 import type { SearchParameter, UnipileClient } from '../src/channel/unipile.js';
 
 interface Args {
@@ -29,16 +29,23 @@ interface Args {
   keepAll: boolean;
 }
 
-/** `--flag value` and `--flag=value`, repeatable, plus comma-separated lists. */
+/**
+ * `--flag value` and `--flag=value`, repeatable.
+ *
+ * Values are NOT split on commas: LinkedIn's own filter names contain them
+ * ("Technology, Information and Internet"), and splitting would quietly search for something
+ * else. Pass the flag twice for two values. `--distance` opts into splitting explicitly.
+ */
 function parseArgs(argv: string[]): Args {
-  const get = (name: string): string[] => {
+  const get = (name: string, split = false): string[] => {
     const out: string[] = [];
     for (let i = 0; i < argv.length; i += 1) {
       const a = argv[i];
       if (a === `--${name}` && argv[i + 1] && !argv[i + 1].startsWith('--')) out.push(argv[i + 1]);
       else if (a.startsWith(`--${name}=`)) out.push(a.slice(name.length + 3));
     }
-    return out.flatMap((v) => v.split(',').map((s) => s.trim())).filter(Boolean);
+    const values = split ? out.flatMap((v) => v.split(',')) : out;
+    return values.map((s) => s.trim()).filter(Boolean);
   };
   const num = (name: string, fallback?: number): number | undefined => {
     const v = get(name)[0];
@@ -51,7 +58,7 @@ function parseArgs(argv: string[]): Args {
     industry: get('industry'),
     keywords: get('keywords').join(' ') || undefined,
     count: num('count', 60) as number,
-    distance: get('distance').map(Number).filter(Number.isFinite),
+    distance: get('distance', true).map(Number).filter(Number.isFinite),
     out: get('out')[0],
     pages: num('pages'),
     keepAll: argv.includes('--keep-all'),
@@ -146,13 +153,13 @@ async function main(): Promise<void> {
     {
       filters: {
         keywords: args.keywords,
-        location: locations.map((l) => l.id),
-        industry: industries.map((i) => i.id),
+        location: [...new Set(locations.map((l) => l.id))],
+        industry: [...new Set(industries.map((i) => i.id))],
         networkDistance: distance,
       },
       target: args.count,
       maxPages: args.pages,
-      excludeHeadline: args.keepAll ? [] : DEFAULT_HEADLINE_EXCLUSIONS,
+      exclude: args.keepAll ? [] : DEFAULT_EXCLUSIONS,
       delayMs: () => 800 + Math.floor(Math.random() * 1200),
     },
   );
