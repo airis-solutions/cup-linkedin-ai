@@ -180,9 +180,30 @@ export interface Repository {
 
   /** Raw counters for the review dashboard, aggregated in one round trip. */
   dashboardStats(sinceIso: string, day: string): Promise<RawStats>;
+  campaignStats(): Promise<CampaignStats[]>;
 }
 
 /** Counters as they come out of the store, before any rate/labelling work. */
+/**
+ * Stages an invited lead can sit in without ever having accepted. Everything else after an
+ * invite means they let us in. Mirrored in SQL (0013_report_stats.sql) — keep both in step.
+ */
+export const NOT_ACCEPTED_STAGES: readonly FunnelStage[] = ['new', 'invited', 'invite_failed', 'invite_expired', 'on_hold'];
+
+/** How one search campaign is doing, for the daily report. */
+export interface CampaignStats {
+  name: string;
+  active: boolean;
+  exhausted: boolean;
+  /** Found, waiting for their invite. */
+  queued: number;
+  invited: number;
+  accepted: number;
+  /** Wrote back at least once. */
+  replied: number;
+  booked: number;
+}
+
 export interface RawStats {
   funnel: Partial<Record<FunnelStage, number>>;
   queueWaitingForInvite: number;

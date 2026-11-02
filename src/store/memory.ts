@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { defaultBrainState } from '../brain/types.js';
 import type {
+  CampaignStats,
   CreateLeadInput,
   EventRecord,
   LeadRecord,
@@ -15,7 +16,7 @@ import type {
   SearchCampaign,
   UpsertCampaignInput,
 } from './repository.js';
-import { emptyQualification } from './repository.js';
+import { emptyQualification, NOT_ACCEPTED_STAGES } from './repository.js';
 
 export class InMemoryRepository implements Repository {
   private leads = new Map<string, LeadRecord>();
@@ -210,9 +211,27 @@ export class InMemoryRepository implements Repository {
       messagesSentSince: this.messages.filter((m) => m.direction === 'outbound' && m.status === 'sent' && m.createdAt >= sinceIso).length,
       repliesSince: this.messages.filter((m) => m.direction === 'inbound' && m.createdAt >= sinceIso).length,
       invitesTotal: invited.length,
-      invitesAccepted: invited.filter((l) => l.stage !== 'new' && l.stage !== 'invited').length,
+      invitesAccepted: invited.filter((l) => !NOT_ACCEPTED_STAGES.includes(l.stage)).length,
       bookedTotal: leads.filter((l) => l.stage === 'booked').length,
     };
+  }
+
+  async campaignStats(): Promise<CampaignStats[]> {
+    const leads = [...this.leads.values()];
+    return [...this.campaigns.values()].map((c) => {
+      const mine = leads.filter((l) => l.campaignId === c.id);
+      const invited = mine.filter((l) => l.invitedAt);
+      return {
+        name: c.name,
+        active: c.active,
+        exhausted: c.exhausted,
+        queued: mine.filter((l) => l.stage === 'new' && !l.doNotContact).length,
+        invited: invited.length,
+        accepted: invited.filter((l) => !NOT_ACCEPTED_STAGES.includes(l.stage)).length,
+        replied: mine.filter((l) => this.messages.some((m) => m.leadId === l.id && m.direction === 'inbound')).length,
+        booked: mine.filter((l) => l.stage === 'booked').length,
+      };
+    });
   }
 
   /** Test helper: all recorded events. */

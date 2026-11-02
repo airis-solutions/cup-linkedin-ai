@@ -19,6 +19,7 @@ import {
   type RawStats,
   type Repository,
   type SearchCampaign,
+  type CampaignStats,
   type UpsertCampaignInput,
 } from './repository.js';
 
@@ -368,6 +369,12 @@ export class SupabaseRepository implements Repository {
       invitesAccepted: num(r.invitesAccepted),
       bookedTotal: num(r.bookedTotal),
     };
+  }
+
+  async campaignStats(): Promise<CampaignStats[]> {
+    const { data, error } = await this.sb.rpc('campaign_stats');
+    if (error) throw new Error(`campaignStats: ${error.message}`);
+    return (Array.isArray(data) ? data : []) as CampaignStats[];
   }
 
   async countEventsSince(kind: EventRecord['kind'], sinceIso: string): Promise<number> {
