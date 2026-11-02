@@ -80,6 +80,7 @@ export function ghlStageId(stage: FunnelStage): string | null {
     case 'do_not_contact':
     case 'invite_failed':
     case 'invite_expired':
+    case 'on_hold':
       return null;
   }
 }

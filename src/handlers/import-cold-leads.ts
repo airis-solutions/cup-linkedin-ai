@@ -63,6 +63,8 @@ export interface ImportOptions {
   queueOnly?: boolean;
   /** Resolve + report only; create no leads and send no invites. */
   dryRun?: boolean;
+  /** Tag every created lead with the campaign that found it. */
+  campaignId?: string;
   /** Pause (ms) after each invite, to space requests out. Default: none. */
   delayMs?: () => number;
   /** Injected for tests; defaults to real setTimeout. */
@@ -140,6 +142,7 @@ export async function importColdLeads(
       linkedinUrl: row.linkedinUrl,
       firstName: row.firstName,
       fullName: row.fullName ?? resolved.name,
+      campaignId: opts.campaignId,
     });
     lead.linkedinProviderId = resolved.providerId;
     // Set the opener language from their country now (no inbound to detect it from yet).

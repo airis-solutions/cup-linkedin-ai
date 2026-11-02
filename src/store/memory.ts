@@ -12,6 +12,8 @@ import type {
   MessageRecord,
   RawStats,
   Repository,
+  SearchCampaign,
+  UpsertCampaignInput,
 } from './repository.js';
 import { emptyQualification } from './repository.js';
 
@@ -20,6 +22,7 @@ export class InMemoryRepository implements Repository {
   private messages: MessageRecord[] = [];
   private events: EventRecord[] = [];
   private dailySends = new Map<string, number>();
+  private campaigns = new Map<string, SearchCampaign>();
 
   /** `clock` stamps events, so tests can put them in the past. */
   constructor(private readonly clock: () => Date = () => new Date()) {}
@@ -60,6 +63,7 @@ export class InMemoryRepository implements Repository {
       unipileChatId: input.unipileChatId,
       fullName: input.fullName,
       firstName: input.firstName,
+      campaignId: input.campaignId,
       source: input.source,
       stage: 'new',
       brain: defaultBrainState(),
@@ -115,6 +119,35 @@ export class InMemoryRepository implements Repository {
       .filter((l) => l.stage === 'new' && !l.doNotContact)
       .sort((a, b) => (a.inviteAttempts ?? 0) - (b.inviteAttempts ?? 0) || a.createdAt.localeCompare(b.createdAt))
       .slice(0, limit);
+  }
+
+  async countQueuedForInvite(): Promise<number> {
+    return [...this.leads.values()].filter((l) => l.stage === 'new' && !l.doNotContact).length;
+  }
+
+  async listRunnableCampaigns(): Promise<SearchCampaign[]> {
+    return [...this.campaigns.values()]
+      .filter((c) => c.active && !c.exhausted)
+      .sort((a, b) => (a.lastRunAt ?? '').localeCompare(b.lastRunAt ?? '') || a.priority - b.priority)
+      .map((c) => ({ ...c }));
+  }
+
+  async upsertCampaign(input: UpsertCampaignInput): Promise<SearchCampaign> {
+    const existing = [...this.campaigns.values()].find((c) => c.name === input.name);
+    const campaign: SearchCampaign = {
+      id: existing?.id ?? randomUUID(),
+      exhausted: existing?.exhausted ?? false,
+      cursor: existing?.cursor,
+      ...existing,
+      active: true,
+      ...input,
+    };
+    this.campaigns.set(campaign.id, campaign);
+    return { ...campaign };
+  }
+
+  async saveCampaign(campaign: SearchCampaign): Promise<void> {
+    this.campaigns.set(campaign.id, { ...campaign });
   }
 
   async listInvitedBefore(beforeIso: string, limit: number): Promise<LeadRecord[]> {

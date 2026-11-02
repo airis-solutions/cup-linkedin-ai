@@ -18,6 +18,8 @@ import {
   type MessageStatus,
   type RawStats,
   type Repository,
+  type SearchCampaign,
+  type UpsertCampaignInput,
 } from './repository.js';
 
 type Row = Record<string, unknown>;
@@ -44,8 +46,22 @@ function rowToLead(r: Row): LeadRecord {
     invitedAt: (r.invited_at as string) ?? undefined,
     invitationId: (r.invitation_id as string) ?? undefined,
     inviteAttempts: (r.invite_attempts as number) ?? 0,
+    campaignId: (r.campaign_id as string) ?? undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
+  };
+}
+
+function rowToCampaign(r: Row): SearchCampaign {
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    filters: r.filters as SearchCampaign['filters'],
+    priority: r.priority as number,
+    active: Boolean(r.active),
+    exhausted: Boolean(r.exhausted),
+    cursor: (r.cursor as string) ?? undefined,
+    lastRunAt: (r.last_run_at as string) ?? undefined,
   };
 }
 
@@ -111,6 +127,7 @@ export class SupabaseRepository implements Repository {
         unipile_chat_id: input.unipileChatId,
         full_name: input.fullName,
         first_name: input.firstName,
+        campaign_id: input.campaignId,
         source: input.source,
         stage: 'new',
         brain: defaultBrainState(),
@@ -228,6 +245,49 @@ export class SupabaseRepository implements Repository {
       .limit(limit);
     if (error) throw new Error(`listQueuedForInvite: ${error.message}`);
     return (data ?? []).map(rowToLead);
+  }
+
+  async countQueuedForInvite(): Promise<number> {
+    const { count, error } = await this.sb
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .eq('stage', 'new')
+      .eq('do_not_contact', false);
+    if (error) throw new Error(`countQueuedForInvite: ${error.message}`);
+    return count ?? 0;
+  }
+
+  async listRunnableCampaigns(): Promise<SearchCampaign[]> {
+    const { data, error } = await this.sb
+      .from('search_campaigns')
+      .select('*')
+      .eq('active', true)
+      .eq('exhausted', false)
+      .order('last_run_at', { ascending: true, nullsFirst: true })
+      .order('priority', { ascending: true });
+    if (error) throw new Error(`listRunnableCampaigns: ${error.message}`);
+    return (data ?? []).map(rowToCampaign);
+  }
+
+  async upsertCampaign(input: UpsertCampaignInput): Promise<SearchCampaign> {
+    const row: Row = { name: input.name, filters: input.filters, priority: input.priority };
+    if (input.active !== undefined) row.active = input.active;
+    if (input.lastRunAt !== undefined) row.last_run_at = input.lastRunAt;
+    const { data, error } = await this.sb
+      .from('search_campaigns')
+      .upsert(row, { onConflict: 'name' })
+      .select('*')
+      .single();
+    if (error) throw new Error(`upsertCampaign: ${error.message}`);
+    return rowToCampaign(data);
+  }
+
+  async saveCampaign(c: SearchCampaign): Promise<void> {
+    const { error } = await this.sb
+      .from('search_campaigns')
+      .update({ cursor: c.cursor ?? null, exhausted: c.exhausted, last_run_at: c.lastRunAt ?? null })
+      .eq('id', c.id);
+    if (error) throw new Error(`saveCampaign: ${error.message}`);
   }
 
   async listInvitedBefore(beforeIso: string, limit: number): Promise<LeadRecord[]> {

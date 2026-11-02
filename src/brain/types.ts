@@ -72,6 +72,7 @@ export type FunnelStage =
   | 'invited' // cold_outbound: connection request sent, awaiting accept (Trigger A)
   | 'invite_failed' // the request kept failing; out of the queue so it can't block it
   | 'invite_expired' // not accepted in time; we withdrew the request
+  | 'on_hold' // imported but deliberately not invited (e.g. outside the current target region)
   | 'opener_sent'
   | 'qualifying'
   | 'qualified'

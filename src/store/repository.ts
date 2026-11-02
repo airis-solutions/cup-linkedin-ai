@@ -6,6 +6,7 @@
  * swapped in later without touching the brain. Mirrors supabase/migrations/0001_init.sql.
  */
 import type { BrainState, BrainEventKind, FunnelStage, Qualification } from '../brain/types.js';
+import type { PeopleSearchFilters } from '../channel/unipile.js';
 
 export type LeadSource =
   | 'cold_outbound'
@@ -61,6 +62,8 @@ export interface LeadRecord {
   invitationId?: string;
   /** Failed connection-request attempts; a lead that keeps failing leaves the queue. */
   inviteAttempts?: number;
+  /** The search campaign that found this lead (for acceptance rate per campaign). */
+  campaignId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -95,7 +98,31 @@ export interface CreateLeadInput {
   unipileChatId?: string;
   fullName?: string;
   firstName?: string;
+  campaignId?: string;
 }
+
+/**
+ * One saved LinkedIn search that keeps the invite queue topped up. Filters hold LinkedIn's own
+ * ids (resolved once by scripts/seed-campaigns.ts), so a run never has to guess what
+ * "Germany" or "Software" means.
+ */
+export interface SearchCampaign {
+  id: string;
+  /** Unique, human readable, e.g. "CH · Software · Gründer". */
+  name: string;
+  filters: PeopleSearchFilters;
+  /** Lower runs first among campaigns that ran equally long ago. */
+  priority: number;
+  active: boolean;
+  /** LinkedIn has no more results; the campaign is retired. */
+  exhausted: boolean;
+  /** Where the next run continues paging. */
+  cursor?: string;
+  lastRunAt?: string;
+}
+
+export type UpsertCampaignInput = Pick<SearchCampaign, 'name' | 'filters' | 'priority'> &
+  Partial<Pick<SearchCampaign, 'active' | 'lastRunAt'>>;
 
 export interface Repository {
   getLead(id: string): Promise<LeadRecord | null>;
@@ -122,6 +149,16 @@ export interface Repository {
   // ── Daily cycle ────────────────────────────────────────────────
   /** Cold leads imported but not yet invited — fewest failed attempts first, then oldest. */
   listQueuedForInvite(limit: number): Promise<LeadRecord[]>;
+  /** How many leads are waiting for an invite (what the refill tops up). */
+  countQueuedForInvite(): Promise<number>;
+
+  // ── Search campaigns ───────────────────────────────────────────
+  /** Active, not exhausted campaigns: longest since last run first, then by priority. */
+  listRunnableCampaigns(): Promise<SearchCampaign[]>;
+  /** Create or update a campaign by name (filters/priority/active); keeps its cursor. */
+  upsertCampaign(input: UpsertCampaignInput): Promise<SearchCampaign>;
+  /** Persist a campaign's progress (cursor, exhausted, last run). */
+  saveCampaign(campaign: SearchCampaign): Promise<void>;
   /** Leads whose connection request went out before `beforeIso` and is still unanswered. */
   listInvitedBefore(beforeIso: string, limit: number): Promise<LeadRecord[]>;
   /** Leads whose follow-up clock has come due. */
