@@ -43,14 +43,13 @@ function toPark(reason: BrainEventKind = 'lead_parked'): BrainDecision {
 }
 
 /**
- * Not a potential customer at all (vendor/agency pitch, recruiter, spam). Do NOT run them
- * through qualification — flag for a human, offer a short polite disengage, and route to
- * do-not-contact so the follow-up scheduler never touches them.
+ * Not a potential customer at all (vendor/agency pitch, recruiter, spam, a birthday wish). Do
+ * NOT run them through qualification — route to do-not-contact so the follow-up scheduler never
+ * touches them. No human flag: these are Robin's own inbox, not a sales moment, and paging
+ * someone for every agency pitch buries the alerts that matter. The orchestrator sends nothing.
  */
 function notProspect(vars: FlowVars): BrainDecision {
-  return decide('not_prospect', fill(FIXED_COPY.not_prospect ?? '', vars), {}, ['flagged_non_prospect'], {
-    flagForHuman: true,
-  });
+  return decide('not_prospect', fill(FIXED_COPY.not_prospect ?? '', vars), {}, ['flagged_non_prospect']);
 }
 
 /** First outbound when a lead opens contact / responds to an opener. */

@@ -90,6 +90,31 @@ describe('orchestrator end-to-end (in-memory)', () => {
     expect(repo.allEvents().map((e) => e.kind)).toContain('flagged_non_prospect');
   });
 
+  it('writes nothing back to someone who is not a prospect, and does not ask anyone to review it', async () => {
+    // Pitches, birthday wishes, private notes: Robin answers those himself if he wants to.
+    const repo = new InMemoryRepository();
+    const alerts: Alert[] = [];
+    let generated = 0;
+    const deps: OrchestratorDeps = {
+      ...makeDeps(repo),
+      classify: async () => ({ intent: 'not_a_prospect' }),
+      generate: async ({ canonical }) => {
+        generated += 1;
+        return canonical;
+      },
+      alert: async (a) => void alerts.push(a),
+      reviewLink: () => 'x',
+    };
+    const lead = await repo.createLead({ source: 'manual', firstName: 'Steven' });
+
+    const res = await handleInbound(deps, lead.id, 'Happy birthday Robin!');
+
+    expect(res.draft).toBeUndefined();
+    expect(generated).toBe(0);
+    expect(alerts).toEqual([]);
+    expect((await repo.messagesForLead(lead.id)).filter((m) => m.direction === 'outbound')).toEqual([]);
+  });
+
   it('still welcomes a genuine first-contact lead', async () => {
     const repo = new InMemoryRepository();
     const deps: OrchestratorDeps = { ...makeDeps(repo), classify: async () => ({ intent: 'other' }) };

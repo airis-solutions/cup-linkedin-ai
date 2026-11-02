@@ -68,6 +68,14 @@ export interface TurnResult {
   node: string;
 }
 
+/**
+ * Nodes that get no reply at all. Someone who is not a prospect (an agency pitch, a birthday
+ * wish, a private note to Robin) gets nothing from the AI and nobody is asked to review a
+ * reply: Robin answers those himself if he wants to. The node and the do-not-contact flag are
+ * still recorded.
+ */
+const SILENT_NODES = new Set<FlowNode>(['not_prospect']);
+
 /** Per-turn context for the voice layer. */
 interface TurnContext {
   language: Language;
@@ -141,7 +149,7 @@ async function commitDecision(
   ctx: TurnContext,
 ): Promise<MessageRecord | undefined> {
   let draft: MessageRecord | undefined;
-  if (decision.reply) {
+  if (decision.reply && !SILENT_NODES.has(decision.nextNode)) {
     // Proactive first touch we initiated (Trigger A/C): they accepted our request, they did
     // not message us first — so the opener greets + thanks for connecting, not "you reached out".
     const coldOpen =

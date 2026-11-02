@@ -29,7 +29,7 @@ describe('non-prospect gate', () => {
     const d = advance(stateAt('welcome'), u('not_a_prospect'), vars);
     expect(d.nextNode).toBe('not_prospect');
     expect(d.nextStage).toBe('do_not_contact');
-    expect(d.flagForHuman).toBe(true);
+    expect(d.flagForHuman).toBeFalsy();
     expect(d.events).toContain('flagged_non_prospect');
     // It does NOT extract or advance qualification.
     expect(d.qualificationPatch).toEqual({});
