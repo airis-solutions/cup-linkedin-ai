@@ -20,7 +20,8 @@
     "db:types": "supabase gen types typescript --local > src/types/database.ts",
     "db:migrate": "node scripts/migrate.mjs",
     "import:leads": "tsx scripts/import-leads.ts",
-    "search:leads": "tsx scripts/search-leads.ts"
+    "search:leads": "tsx scripts/search-leads.ts",
+    "seed:campaigns": "tsx scripts/seed-campaigns.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",
