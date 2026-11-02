@@ -105,9 +105,19 @@ export class InMemoryRepository implements Repository {
     return this.messages.filter((m) => m.leadId === leadId);
   }
 
+  async getMessage(messageId: string): Promise<MessageRecord | null> {
+    const msg = this.messages.find((m) => m.id === messageId);
+    return msg ? { ...msg } : null;
+  }
+
   async setMessageStatus(messageId: string, status: MessageRecord['status']): Promise<void> {
     const msg = this.messages.find((m) => m.id === messageId);
     if (msg) msg.status = status;
+  }
+
+  async updateMessageBody(messageId: string, body: string): Promise<void> {
+    const msg = this.messages.find((m) => m.id === messageId);
+    if (msg) msg.body = body;
   }
 
   async countEventsSince(kind: EventRecord['kind'], sinceIso: string): Promise<number> {

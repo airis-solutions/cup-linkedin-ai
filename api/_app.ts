@@ -10,6 +10,7 @@ import { createGhlFromEnv } from '../src/channel/ghl.js';
 import { loadEnv } from '../src/config/env.js';
 import { inSendWindow, localParts, defaultCycleOptions } from '../src/handlers/daily-cycle.js';
 import type { LeadRecord } from '../src/store/repository.js';
+import { reviewUrl } from '../src/lib/review-link.js';
 
 const BOOKING_LINK = 'https://www.crypto-gameplan.com/booking';
 const WALKTHROUGH_LINK = 'https://crypto-gameplan.com';
@@ -44,6 +45,8 @@ function deps(): AppDeps {
     ghl: createGhlFromEnv(),
     webhookSecret: env.WEBHOOK_SHARED_SECRET,
     dashboardToken: env.DASHBOARD_TOKEN,
+    reviewLink: (messageId: string) =>
+      env.DASHBOARD_TOKEN ? reviewUrl(env.PUBLIC_BASE_URL, messageId, env.DASHBOARD_TOKEN, new Date()) : undefined,
     // Same rules as the cycle: inside the window, and one unit of the shared daily budget.
     sendGate: async () => {
       if (env.PAUSE_OUTBOUND || !inSendWindow(window)) return false;
@@ -58,13 +61,22 @@ function deps(): AppDeps {
 /** Adapt a Vercel (req,res) to the shared pure router for the given canonical path. */
 export async function handle(req: VercelRequest, res: VercelResponse, path: string): Promise<void> {
   try {
+    // Vercel parses both JSON and url-encoded form bodies into an object.
     const body = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+    const query = Object.fromEntries(
+      Object.entries(req.query ?? {}).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]),
+    );
     const result = await route(deps(), {
       method: req.method ?? 'GET',
       path,
       body,
       headers: req.headers as Record<string, string | undefined>,
+      query,
     });
+    if (result.html !== undefined) {
+      res.status(result.status).setHeader('content-type', 'text/html; charset=utf-8').send(result.html);
+      return;
+    }
     res.status(result.status).json(result.json);
   } catch (err) {
     // Surface the real reason (e.g. missing env var) instead of an opaque 500.

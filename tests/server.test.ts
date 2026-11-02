@@ -2,6 +2,7 @@ import { route, type AppDeps } from '../src/server.js';
 import { InMemoryRepository } from '../src/store/memory.js';
 import type { UnipileClient } from '../src/channel/index.js';
 import type { FlowNode, InboundUnderstanding, LeadRecord, MessageRecord } from '../src/brain/types.js';
+import { signReviewToken } from '../src/lib/review-link.js';
 
 const SCRIPT: Partial<Record<FlowNode, InboundUnderstanding>> = { welcome: { intent: 'agree' } };
 
@@ -144,6 +145,111 @@ describe('server routes', () => {
       expect(uni.send).toEqual([]);
       // Stays approved, so the next cycle run inside the window picks it up.
       expect((await repo.messagesForLead(leadId))[0].status).toBe('approved');
+    });
+  });
+
+  describe('review page (link from Telegram)', () => {
+    const inAWeek = () => new Date(Date.now() + 7 * 86_400_000);
+
+    async function draftFor(repo: InMemoryRepository) {
+      const lead = await repo.createLead({ source: 'cold_outbound', firstName: 'Anna', fullName: 'Anna <Beispiel>' });
+      lead.unipileChatId = 'chat-a';
+      await repo.saveLead(lead);
+      const m = await repo.appendMessage({ leadId: lead.id, direction: 'outbound', status: 'pending_hitl', body: 'Hi Anna, danke fürs Vernetzen' });
+      return { leadId: lead.id, messageId: m.id, t: signReviewToken(m.id, inAWeek(), TOKEN) };
+    }
+    const get = (t: string) => ({ method: 'GET', path: '/review', body: {}, headers: {}, query: { t } });
+    const post = (body: Record<string, unknown>) => ({ method: 'POST', path: '/review', body, headers: {} });
+
+    it('shows the draft without touching it (Telegram fetches links for previews)', async () => {
+      const repo = new InMemoryRepository();
+      const { leadId, t } = await draftFor(repo);
+
+      const r = await route(makeDeps(repo, fakeUnipile().client), get(t));
+
+      expect(r.status).toBe(200);
+      expect(r.html).toContain('Hi Anna, danke fürs Vernetzen');
+      expect(r.html).toContain('Anna &lt;Beispiel&gt;'); // escaped
+      expect((await repo.messagesForLead(leadId))[0].status).toBe('pending_hitl');
+    });
+
+    it('refuses a forged or expired link', async () => {
+      const repo = new InMemoryRepository();
+      const { messageId } = await draftFor(repo);
+      const deps = makeDeps(repo, fakeUnipile().client);
+
+      expect((await route(deps, get(signReviewToken(messageId, inAWeek(), 'wrong')))).status).toBe(403);
+      expect((await route(deps, get(signReviewToken(messageId, new Date(Date.now() - 1000), TOKEN)))).status).toBe(403);
+      expect((await route(deps, post({ t: 'x.1.y', action: 'approve' }))).status).toBe(403);
+    });
+
+    it('approve sends the draft as written', async () => {
+      const repo = new InMemoryRepository();
+      const uni = fakeUnipile();
+      const { t } = await draftFor(repo);
+
+      const r = await route(makeDeps(repo, uni.client), post({ t, action: 'approve', text: 'Hi Anna, danke fürs Vernetzen' }));
+
+      expect(r.status).toBe(200);
+      expect(uni.send).toEqual([{ chatId: 'chat-a', text: 'Hi Anna, danke fürs Vernetzen' }]);
+    });
+
+    it('approve with an edit sends the edited text', async () => {
+      const repo = new InMemoryRepository();
+      const uni = fakeUnipile();
+      const { leadId, t } = await draftFor(repo);
+
+      await route(makeDeps(repo, uni.client), post({ t, action: 'approve', text: '  Hallo Anna, schön dass es geklappt hat!  ' }));
+
+      expect(uni.send[0].text).toBe('Hallo Anna, schön dass es geklappt hat!');
+      expect((await repo.messagesForLead(leadId))[0].body).toBe('Hallo Anna, schön dass es geklappt hat!');
+    });
+
+    it('outside the send window it approves and leaves sending to the next run', async () => {
+      const repo = new InMemoryRepository();
+      const uni = fakeUnipile();
+      const { leadId, t } = await draftFor(repo);
+
+      const r = await route({ ...makeDeps(repo, uni.client), sendGate: async () => false }, post({ t, action: 'approve' }));
+
+      expect(r.html).toContain('nächsten Lauf');
+      expect(uni.send).toEqual([]);
+      expect((await repo.messagesForLead(leadId))[0].status).toBe('approved');
+    });
+
+    it('discard skips the draft', async () => {
+      const repo = new InMemoryRepository();
+      const uni = fakeUnipile();
+      const { leadId, t } = await draftFor(repo);
+
+      await route(makeDeps(repo, uni.client), post({ t, action: 'reject' }));
+
+      expect(uni.send).toEqual([]);
+      expect((await repo.messagesForLead(leadId))[0].status).toBe('skipped');
+    });
+
+    it('a second click does nothing (no double send)', async () => {
+      const repo = new InMemoryRepository();
+      const uni = fakeUnipile();
+      const { t } = await draftFor(repo);
+      const deps = makeDeps(repo, uni.client);
+
+      await route(deps, post({ t, action: 'approve' }));
+      const again = await route(deps, post({ t, action: 'approve' }));
+
+      expect(again.status).toBe(409);
+      expect(uni.send).toHaveLength(1);
+    });
+
+    it('refuses an empty edit', async () => {
+      const repo = new InMemoryRepository();
+      const uni = fakeUnipile();
+      const { t } = await draftFor(repo);
+
+      const r = await route(makeDeps(repo, uni.client), post({ t, action: 'approve', text: '   ' }));
+
+      expect(r.status).toBe(400);
+      expect(uni.send).toEqual([]);
     });
   });
 });

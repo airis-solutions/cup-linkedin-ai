@@ -227,9 +227,20 @@ export class SupabaseRepository implements Repository {
     return (data ?? []).map(rowToMessage);
   }
 
+  async getMessage(messageId: string): Promise<MessageRecord | null> {
+    const { data, error } = await this.sb.from('messages').select('*').eq('id', messageId).maybeSingle();
+    if (error) throw new Error(`getMessage: ${error.message}`);
+    return data ? rowToMessage(data) : null;
+  }
+
   async setMessageStatus(messageId: string, status: MessageStatus): Promise<void> {
     const { error } = await this.sb.from('messages').update({ status }).eq('id', messageId);
     if (error) throw new Error(`setMessageStatus: ${error.message}`);
+  }
+
+  async updateMessageBody(messageId: string, body: string): Promise<void> {
+    const { error } = await this.sb.from('messages').update({ body }).eq('id', messageId);
+    if (error) throw new Error(`updateMessageBody: ${error.message}`);
   }
 
   // ── Daily cycle ────────────────────────────────────────────────

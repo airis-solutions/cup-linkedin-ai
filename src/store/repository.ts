@@ -143,8 +143,11 @@ export interface Repository {
   /** Messages awaiting a human approve/reject before send. */
   pendingApprovals(): Promise<MessageRecord[]>;
   messagesForLead(leadId: string): Promise<MessageRecord[]>;
+  getMessage(messageId: string): Promise<MessageRecord | null>;
   /** Update an outbound message's status (e.g. approved -> sent). */
   setMessageStatus(messageId: string, status: MessageStatus): Promise<void>;
+  /** Replace a draft's text with the reviewer's edit. */
+  updateMessageBody(messageId: string, body: string): Promise<void>;
 
   // ── Daily cycle ────────────────────────────────────────────────
   /** Cold leads imported but not yet invited — fewest failed attempts first, then oldest. */
