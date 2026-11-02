@@ -23,7 +23,9 @@ export type AlertKind =
   /** Something in the machinery failed and stayed failed. */
   | 'system'
   /** A draft waits for a human OK before it goes out. */
-  | 'approval';
+  | 'approval'
+  /** The evening summary. */
+  | 'report';
 
 export interface Alert {
   kind: AlertKind;
@@ -43,6 +45,7 @@ const ICON: Record<AlertKind, string> = {
   compliance: '⚠️',
   system: '🔧',
   approval: '✍️',
+  report: '📊',
 };
 
 /** Fire an alert. Never throws, never blocks the caller on a slow endpoint. */

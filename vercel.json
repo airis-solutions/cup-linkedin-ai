@@ -9,6 +9,7 @@
   },
   "crons": [
     { "path": "/api/cron/daily", "schedule": "0 8,11,14,16 * * *" },
-    { "path": "/api/cron/refill", "schedule": "30 6 * * 1-5" }
+    { "path": "/api/cron/refill", "schedule": "30 6 * * 1-5" },
+    { "path": "/api/cron/report", "schedule": "0 17 * * *" }
   ]
 }
