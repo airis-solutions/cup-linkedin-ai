@@ -28,9 +28,15 @@ import { dispatchApprovedForLead } from '../channel/outbound.js';
 import type { UnipileClient } from '../channel/unipile.js';
 import type { LeadRecord, Repository } from '../store/repository.js';
 import { logger } from '../lib/logger.js';
+import { notify, type Alert } from '../lib/notify.js';
+
+/** After this many failed requests a lead leaves the queue for good. */
+export const MAX_INVITE_ATTEMPTS = 3;
 
 export interface CycleDeps extends OrchestratorDeps {
   unipile: UnipileClient | null;
+  /** Where machinery alerts go. Defaults to the shared webhook; injectable for tests. */
+  alert?: (alert: Alert) => Promise<unknown>;
 }
 
 export interface CycleOptions {
@@ -59,6 +65,8 @@ export interface CycleResult {
   /** Why the cycle did nothing (outside window, budget spent, not configured). */
   reason?: string;
   invited: number;
+  /** Connection requests Unipile rejected this run. */
+  inviteFailures: number;
   followUps: number;
   dispatched: number;
   budgetRemaining: number;
@@ -109,24 +117,41 @@ export function inSendWindow(opts: CycleOptions): boolean {
   return hour >= opts.windowStartHour && hour < opts.windowEndHour;
 }
 
-/** Send one queued cold lead a connection request. Returns true when it went out. */
-async function inviteOne(deps: CycleDeps, lead: LeadRecord, nowIso: string): Promise<boolean> {
-  if (!deps.unipile) return false;
-  const providerId = lead.linkedinProviderId;
-  if (!providerId) {
-    logger.warn({ leadId: lead.id }, 'cycle.invite_skipped_no_provider_id');
-    return false;
-  }
-  const res = await deps.unipile.sendInvitation(providerId);
+type InviteOutcome = { ok: true } | { ok: false; error: string };
+
+/**
+ * Send one queued cold lead a connection request.
+ *
+ * A failure is recorded on the lead and pushes it to the back of the queue; after
+ * MAX_INVITE_ATTEMPTS it leaves the queue. Until 2026-11 a failure was only logged, so the
+ * two oldest leads failed on every run for three weeks and nobody behind them was invited.
+ */
+async function inviteOne(deps: CycleDeps, lead: LeadRecord, nowIso: string): Promise<InviteOutcome> {
+  if (!deps.unipile) return { ok: false, error: 'linkedin_not_configured' };
+  const res = lead.linkedinProviderId
+    ? await deps.unipile.sendInvitation(lead.linkedinProviderId)
+    : { ok: false as const, error: 'no provider id' };
+
   if (!res.ok) {
-    logger.warn({ leadId: lead.id, error: res.error }, 'cycle.invite_failed');
-    return false;
+    const error = res.error ?? 'unknown error';
+    lead.inviteAttempts = (lead.inviteAttempts ?? 0) + 1;
+    if (lead.inviteAttempts >= MAX_INVITE_ATTEMPTS) lead.stage = 'invite_failed';
+    await deps.repo.saveLead(lead);
+    await deps.repo.appendEvent({
+      leadId: lead.id,
+      kind: 'invite_failed',
+      payload: { error, attempt: lead.inviteAttempts },
+    });
+    logger.warn({ leadId: lead.id, error, attempt: lead.inviteAttempts }, 'cycle.invite_failed');
+    return { ok: false, error };
   }
+
   lead.stage = 'invited';
   lead.invitedAt = nowIso;
+  lead.invitationId = res.id;
   await deps.repo.saveLead(lead);
   await deps.repo.appendEvent({ leadId: lead.id, kind: 'invite_sent', payload: {} });
-  return true;
+  return { ok: true };
 }
 
 /**
@@ -137,7 +162,7 @@ export async function runDailyCycle(deps: CycleDeps, options: Partial<CycleOptio
   const opts = defaultCycleOptions(options);
   const now = opts.now();
   const { day } = localParts(now, opts.timezone);
-  const idle: CycleResult = { ran: false, invited: 0, followUps: 0, dispatched: 0, budgetRemaining: 0 };
+  const idle: CycleResult = { ran: false, invited: 0, inviteFailures: 0, followUps: 0, dispatched: 0, budgetRemaining: 0 };
 
   if (!deps.unipile) {
     return { ...idle, reason: 'linkedin_not_configured' };
@@ -151,7 +176,7 @@ export async function runDailyCycle(deps: CycleDeps, options: Partial<CycleOptio
     return { ...idle, reason: 'daily_cap_reached' };
   }
 
-  const result: CycleResult = { ran: true, invited: 0, followUps: 0, dispatched: 0, budgetRemaining: 0 };
+  const result: CycleResult = { ran: true, invited: 0, inviteFailures: 0, followUps: 0, dispatched: 0, budgetRemaining: 0 };
   let first = true;
   const pace = async (): Promise<void> => {
     if (!first) await opts.sleep(opts.jitterMs());
@@ -184,10 +209,24 @@ export async function runDailyCycle(deps: CycleDeps, options: Partial<CycleOptio
 
   // 3) Drip connection requests to the cold queue, with whatever budget is left.
   const queued = await deps.repo.listQueuedForInvite(opts.invitesPerRun);
+  const inviteErrors: string[] = [];
   for (const lead of queued) {
     if ((await deps.repo.reserveDailySends(day, opts.dailyCap, 1)) === 0) break;
     await pace();
-    if (await inviteOne(deps, lead, now.toISOString())) result.invited += 1;
+    const outcome = await inviteOne(deps, lead, now.toISOString());
+    if (outcome.ok) result.invited += 1;
+    else inviteErrors.push(outcome.error);
+  }
+  result.inviteFailures = inviteErrors.length;
+
+  // Nothing got through: say so loudly. This is what went unnoticed for three weeks.
+  if (result.inviteFailures > 0 && result.invited === 0) {
+    await (deps.alert ?? notify)({
+      kind: 'system',
+      title: `Keine Vernetzungsanfrage ging raus (${result.inviteFailures} gescheitert)`,
+      detail: [...new Set(inviteErrors)].join('\n'),
+      context: { day },
+    });
   }
 
   result.budgetRemaining = Math.max(0, opts.dailyCap - (await deps.repo.sentToday(day)));

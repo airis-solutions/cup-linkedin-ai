@@ -70,6 +70,7 @@ export type FlowNode =
 export type FunnelStage =
   | 'new'
   | 'invited' // cold_outbound: connection request sent, awaiting accept (Trigger A)
+  | 'invite_failed' // the request kept failing; out of the queue so it can't block it
   | 'opener_sent'
   | 'qualifying'
   | 'qualified'

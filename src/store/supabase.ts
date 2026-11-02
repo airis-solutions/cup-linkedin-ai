@@ -42,6 +42,8 @@ function rowToLead(r: Row): LeadRecord {
     nextActionAt: (r.next_action_at as string) ?? undefined,
     lastOutboundAt: (r.last_outbound_at as string) ?? undefined,
     invitedAt: (r.invited_at as string) ?? undefined,
+    invitationId: (r.invitation_id as string) ?? undefined,
+    inviteAttempts: (r.invite_attempts as number) ?? 0,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -141,6 +143,8 @@ export class SupabaseRepository implements Repository {
         next_action_at: lead.nextActionAt ?? null,
         last_outbound_at: lead.lastOutboundAt ?? null,
         invited_at: lead.invitedAt ?? null,
+        invitation_id: lead.invitationId ?? null,
+        invite_attempts: lead.inviteAttempts ?? 0,
         updated_at: new Date().toISOString(),
       })
       .eq('id', lead.id);
@@ -219,6 +223,7 @@ export class SupabaseRepository implements Repository {
       .select('*')
       .eq('stage', 'new')
       .eq('do_not_contact', false)
+      .order('invite_attempts', { ascending: true })
       .order('created_at', { ascending: true })
       .limit(limit);
     if (error) throw new Error(`listQueuedForInvite: ${error.message}`);

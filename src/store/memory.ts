@@ -106,7 +106,7 @@ export class InMemoryRepository implements Repository {
   async listQueuedForInvite(limit: number): Promise<LeadRecord[]> {
     return [...this.leads.values()]
       .filter((l) => l.stage === 'new' && !l.doNotContact)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .sort((a, b) => (a.inviteAttempts ?? 0) - (b.inviteAttempts ?? 0) || a.createdAt.localeCompare(b.createdAt))
       .slice(0, limit);
   }
 

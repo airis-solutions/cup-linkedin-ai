@@ -25,6 +25,7 @@ export type EventKind =
   | 'reply_received'
   | 'opener_sent'
   | 'invite_sent'
+  | 'invite_failed'
   | 'compliance_blocked'
   | 'booking_confirmed';
 
@@ -55,6 +56,10 @@ export interface LeadRecord {
   lastOutboundAt?: string;
   /** When the connection request went out (cold outbound). */
   invitedAt?: string;
+  /** Unipile's id for the sent request — needed to withdraw it if it is never accepted. */
+  invitationId?: string;
+  /** Failed connection-request attempts; a lead that keeps failing leaves the queue. */
+  inviteAttempts?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -114,7 +119,7 @@ export interface Repository {
   setMessageStatus(messageId: string, status: MessageStatus): Promise<void>;
 
   // ── Daily cycle ────────────────────────────────────────────────
-  /** Cold leads imported but not yet invited, oldest first. */
+  /** Cold leads imported but not yet invited — fewest failed attempts first, then oldest. */
   listQueuedForInvite(limit: number): Promise<LeadRecord[]>;
   /** Leads whose follow-up clock has come due. */
   listDueForFollowUp(nowIso: string, limit: number): Promise<LeadRecord[]>;

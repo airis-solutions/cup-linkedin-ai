@@ -2,6 +2,7 @@ import { InMemoryRepository } from '../../src/store/memory.js';
 import { inSendWindow, localParts, runDailyCycle, defaultCycleOptions } from '../../src/handlers/daily-cycle.js';
 import type { CycleDeps } from '../../src/handlers/daily-cycle.js';
 import type { LeadRecord } from '../../src/store/repository.js';
+import type { Alert } from '../../src/lib/notify.js';
 
 const VARS = (lead: LeadRecord) => ({
   firstName: lead.firstName ?? 'there',
@@ -191,5 +192,86 @@ describe('priority when the budget is tight', () => {
 
     expect(res.dispatched).toBe(1);
     expect(res.invited).toBe(2); // 3 budget − 1 reply
+  });
+});
+
+describe('failing invites', () => {
+  const opts = { invitesPerRun: 2, jitterMs: () => 0, sleep: async () => {}, now: () => TUESDAY_10 };
+
+  /** Unipile stub that rejects some provider ids and records every attempt. */
+  function depsWithFailures(repo: InMemoryRepository, failing: Set<string>, alerts: Alert[]): CycleDeps {
+    const base = makeDeps(repo, TUESDAY_10, { invites: [], sent: [] });
+    return {
+      ...base,
+      alert: async (a) => {
+        alerts.push(a);
+      },
+      unipile: {
+        ...base.unipile,
+        sendInvitation: async (providerId: string) =>
+          failing.has(providerId)
+            ? { ok: false as const, error: 'Unipile 422: cannot invite' }
+            : { ok: true as const, id: `inv-${providerId}` },
+      } as unknown as CycleDeps['unipile'],
+    };
+  }
+
+  it('does not let a lead that keeps failing block the rest of the queue', async () => {
+    // The live bug from 12.10.: the two oldest leads failed every run and nobody behind them
+    // was ever invited.
+    const repo = new InMemoryRepository();
+    for (const p of ['bad1', 'bad2', 'good1', 'good2']) await queueColdLead(repo, p);
+    const deps = depsWithFailures(repo, new Set(['bad1', 'bad2']), []);
+
+    await runDailyCycle(deps, { ...opts, dailyCap: 50 });
+    const second = await runDailyCycle(deps, { ...opts, dailyCap: 50 });
+
+    expect(second.invited).toBe(2);
+  });
+
+  it('takes a lead out of the queue after three failed attempts', async () => {
+    const repo = new InMemoryRepository();
+    const bad = await queueColdLead(repo, 'bad1');
+    const deps = depsWithFailures(repo, new Set(['bad1']), []);
+
+    for (let i = 0; i < 3; i += 1) await runDailyCycle(deps, { ...opts, dailyCap: 50 });
+
+    const after = await repo.getLead(bad.id);
+    expect(after?.stage).toBe('invite_failed');
+    expect(after?.inviteAttempts).toBe(3);
+    expect(await repo.listQueuedForInvite(10)).toEqual([]);
+  });
+
+  it('remembers the invitation id so the request can be withdrawn later', async () => {
+    const repo = new InMemoryRepository();
+    const lead = await queueColdLead(repo, 'good1');
+
+    await runDailyCycle(depsWithFailures(repo, new Set(), []), { ...opts, dailyCap: 50 });
+
+    expect((await repo.getLead(lead.id))?.invitationId).toBe('inv-good1');
+  });
+
+  it('raises a system alert when a run tries to invite and nothing goes out', async () => {
+    const repo = new InMemoryRepository();
+    await queueColdLead(repo, 'bad1');
+    const alerts: Alert[] = [];
+
+    const res = await runDailyCycle(depsWithFailures(repo, new Set(['bad1']), alerts), { ...opts, dailyCap: 50 });
+
+    expect(res.invited).toBe(0);
+    expect(res.inviteFailures).toBe(1);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].kind).toBe('system');
+    expect(alerts[0].detail).toContain('Unipile 422');
+  });
+
+  it('stays quiet when invites go out', async () => {
+    const repo = new InMemoryRepository();
+    await queueColdLead(repo, 'good1');
+    const alerts: Alert[] = [];
+
+    await runDailyCycle(depsWithFailures(repo, new Set(), alerts), { ...opts, dailyCap: 50 });
+
+    expect(alerts).toEqual([]);
   });
 });
