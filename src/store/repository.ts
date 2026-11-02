@@ -132,6 +132,8 @@ export interface Repository {
   reserveDailySends(day: string, limit: number, count: number): Promise<number>;
   /** Sends already used today (for reporting). */
   sentToday(day: string): Promise<number>;
+  /** How many events of `kind` happened at or after `sinceIso` (e.g. invites this week). */
+  countEventsSince(kind: EventKind, sinceIso: string): Promise<number>;
 
   /** Raw counters for the review dashboard, aggregated in one round trip. */
   dashboardStats(sinceIso: string, day: string): Promise<RawStats>;

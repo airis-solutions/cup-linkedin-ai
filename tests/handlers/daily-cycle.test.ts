@@ -275,3 +275,40 @@ describe('failing invites', () => {
     expect(alerts).toEqual([]);
   });
 });
+
+describe('weekly invite cap', () => {
+  const opts = { invitesPerRun: 5, dailyCap: 50, jitterMs: () => 0, sleep: async () => {}, now: () => TUESDAY_10 };
+
+  it('stops inviting once the rolling 7-day cap is reached', async () => {
+    const repo = new InMemoryRepository(() => TUESDAY_10);
+    // Three invites already went out earlier this week.
+    for (const p of ['old1', 'old2', 'old3']) {
+      const lead = await queueColdLead(repo, p);
+      await repo.appendEvent({ leadId: lead.id, kind: 'invite_sent', payload: {} });
+      lead.stage = 'invited';
+      await repo.saveLead(lead);
+    }
+    for (const p of ['p1', 'p2', 'p3']) await queueColdLead(repo, p);
+    const fake: Fake = { invites: [], sent: [] };
+
+    const res = await runDailyCycle(makeDeps(repo, TUESDAY_10, fake), { ...opts, weeklyInviteCap: 4 });
+
+    expect(res.invited).toBe(1);
+    expect(fake.invites).toEqual(['p1']);
+  });
+
+  it('only counts invites from the last seven days', async () => {
+    const repo = new InMemoryRepository(() => TUESDAY_10);
+    const lead = await queueColdLead(repo, 'old');
+    await repo.appendEvent({ leadId: lead.id, kind: 'invite_sent', payload: {} });
+    lead.stage = 'invited';
+    await repo.saveLead(lead);
+    await queueColdLead(repo, 'p1');
+    const fake: Fake = { invites: [], sent: [] };
+    const nextWeek = new Date(TUESDAY_10.getTime() + 8 * 86_400_000);
+
+    const res = await runDailyCycle(makeDeps(repo, nextWeek, fake), { ...opts, now: () => nextWeek, weeklyInviteCap: 1 });
+
+    expect(res.invited).toBe(1);
+  });
+});

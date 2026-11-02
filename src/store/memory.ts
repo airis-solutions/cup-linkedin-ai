@@ -21,6 +21,9 @@ export class InMemoryRepository implements Repository {
   private events: EventRecord[] = [];
   private dailySends = new Map<string, number>();
 
+  /** `clock` stamps events, so tests can put them in the past. */
+  constructor(private readonly clock: () => Date = () => new Date()) {}
+
   async getLead(id: string): Promise<LeadRecord | null> {
     return this.leads.get(id) ?? null;
   }
@@ -81,7 +84,7 @@ export class InMemoryRepository implements Repository {
   }
 
   async appendEvent(evt: Omit<EventRecord, 'id' | 'occurredAt'>): Promise<EventRecord> {
-    const record: EventRecord = { ...evt, id: randomUUID(), occurredAt: new Date().toISOString() };
+    const record: EventRecord = { ...evt, id: randomUUID(), occurredAt: this.clock().toISOString() };
     this.events.push(record);
     return record;
   }
@@ -101,6 +104,10 @@ export class InMemoryRepository implements Repository {
   async setMessageStatus(messageId: string, status: MessageRecord['status']): Promise<void> {
     const msg = this.messages.find((m) => m.id === messageId);
     if (msg) msg.status = status;
+  }
+
+  async countEventsSince(kind: EventRecord['kind'], sinceIso: string): Promise<number> {
+    return this.events.filter((e) => e.kind === kind && e.occurredAt >= sinceIso).length;
   }
 
   async listQueuedForInvite(limit: number): Promise<LeadRecord[]> {

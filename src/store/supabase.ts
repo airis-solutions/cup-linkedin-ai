@@ -287,6 +287,16 @@ export class SupabaseRepository implements Repository {
     };
   }
 
+  async countEventsSince(kind: EventRecord['kind'], sinceIso: string): Promise<number> {
+    const { count, error } = await this.sb
+      .from('events')
+      .select('id', { count: 'exact', head: true })
+      .eq('kind', kind)
+      .gte('occurred_at', sinceIso);
+    if (error) throw new Error(`countEventsSince: ${error.message}`);
+    return count ?? 0;
+  }
+
   async sentToday(day: string): Promise<number> {
     const { data, error } = await this.sb
       .from('daily_send_counter')

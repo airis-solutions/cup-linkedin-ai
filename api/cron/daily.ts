@@ -29,6 +29,7 @@ export default async (req: VercelRequest, res: VercelResponse): Promise<void> =>
     const result = await runDailyCycle(appDeps(), {
       dailyCap: env.DAILY_ACTION_CAP,
       invitesPerRun: env.INVITES_PER_RUN,
+      weeklyInviteCap: env.WEEKLY_INVITE_CAP,
       windowStartHour: env.SEND_WINDOW_START_HOUR,
       windowEndHour: env.SEND_WINDOW_END_HOUR,
       timezone: env.SEND_TIMEZONE,

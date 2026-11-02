@@ -44,6 +44,11 @@ export interface CycleOptions {
   dailyCap: number;
   /** Most invites to send in a single run, so one run never dumps the whole day at once. */
   invitesPerRun: number;
+  /**
+   * Most invites in any rolling 7 days. LinkedIn judges invite volume per week, so a raised
+   * daily cap must not be able to add up to a week that gets the account restricted.
+   */
+  weeklyInviteCap: number;
   /** Local hour (inclusive) the sending window opens. */
   windowStartHour: number;
   /** Local hour (exclusive) the sending window closes. */
@@ -78,6 +83,7 @@ export const defaultCycleOptions = (over: Partial<CycleOptions> = {}): CycleOpti
   // Ramp-up values — see env.ts for why these are low. Overridable per run.
   dailyCap: 15,
   invitesPerRun: 2,
+  weeklyInviteCap: 40,
   windowStartHour: 9,
   windowEndHour: 18,
   timezone: 'Europe/Berlin',
@@ -208,7 +214,9 @@ export async function runDailyCycle(deps: CycleDeps, options: Partial<CycleOptio
   }
 
   // 3) Drip connection requests to the cold queue, with whatever budget is left.
-  const queued = await deps.repo.listQueuedForInvite(opts.invitesPerRun);
+  const weekAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+  const weekLeft = Math.max(0, opts.weeklyInviteCap - (await deps.repo.countEventsSince('invite_sent', weekAgo)));
+  const queued = weekLeft > 0 ? await deps.repo.listQueuedForInvite(Math.min(opts.invitesPerRun, weekLeft)) : [];
   const inviteErrors: string[] = [];
   for (const lead of queued) {
     if ((await deps.repo.reserveDailySends(day, opts.dailyCap, 1)) === 0) break;
