@@ -5,6 +5,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // Tests must never reach the real Telegram group. An empty value counts as unset, and
+    // dotenv leaves keys that already exist alone, so the local .env cannot fill it back in.
+    env: { ALERT_WEBHOOK_URL: '' },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
