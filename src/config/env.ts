@@ -54,6 +54,13 @@ const envSchema = z.object({
   WEEKLY_INVITE_CAP: z.coerce.number().int().positive().default(40),
   /** Unanswered connection requests older than this are withdrawn. */
   INVITE_MAX_AGE_DAYS: z.coerce.number().int().positive().default(21),
+  /**
+   * The refill keeps this many leads waiting for an invite (~10 weekdays at the current pace).
+   * More only goes stale before it is sent.
+   */
+  QUEUE_TARGET: z.coerce.number().int().positive().default(80),
+  /** LinkedIn search pages one refill run may use. Searches are limited on a free account. */
+  REFILL_MAX_PAGES: z.coerce.number().int().positive().default(6),
   /** Sending window in SEND_TIMEZONE — nothing leaves outside it. */
   SEND_WINDOW_START_HOUR: z.coerce.number().int().min(0).max(23).default(9),
   SEND_WINDOW_END_HOUR: z.coerce.number().int().min(1).max(24).default(18),
