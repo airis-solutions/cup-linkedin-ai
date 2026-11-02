@@ -26,6 +26,8 @@ const envSchema = z.object({
   TYPEFORM_FORM_ID_APPLICATION: z.string().optional(),
 
   WEBHOOK_BASE_URL: z.string().url().optional(),
+  /** Public address of this deployment, for links in Telegram (review pages, dashboard). */
+  PUBLIC_BASE_URL: z.string().url().default('https://cup-linkedin-ai.vercel.app'),
   WEBHOOK_SHARED_SECRET: z.string().optional(),
 
   LINKEDIN_DMS_PER_DAY_LIMIT: z.coerce.number().int().positive().default(30),

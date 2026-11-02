@@ -26,7 +26,7 @@ import type {
 } from './brain/types.js';
 import type { LeadRecord, MessageRecord, Repository } from './store/repository.js';
 import { logger } from './lib/logger.js';
-import { notify } from './lib/notify.js';
+import { notify, type Alert } from './lib/notify.js';
 
 export interface OrchestratorDeps {
   repo: Repository;
@@ -42,6 +42,10 @@ export interface OrchestratorDeps {
   followUpHours?: number;
   /** Injectable clock, so the scheduling logic is testable. */
   now?: () => Date;
+  /** Where alerts go. Default: the alert webhook (Telegram). */
+  alert?: (alert: Alert) => Promise<unknown>;
+  /** Signed review page for a draft. Unset = drafts are announced without a link. */
+  reviewLink?: (messageId: string) => string | undefined;
 }
 
 /**
@@ -118,7 +122,7 @@ async function persistOutbound(
       kind: 'compliance_blocked',
       payload: { node, violations: hits.map((v) => ({ rule: v.rule, match: v.match })) },
     });
-    void notify({
+    void (deps.alert ?? notify)({
       kind: 'compliance',
       title: 'Entwurf wegen Compliance zurückgehalten',
       detail: `${hits.map((v) => `${v.rule} ("${v.match}")`).join(', ')}\n\n"${reply.slice(0, 300)}"`,
@@ -155,6 +159,7 @@ async function commitDecision(
       coldOpen,
     });
     draft = await persistOutbound(deps, lead.id, text, decision.nextNode);
+    if (draft.status === 'pending_hitl') announceDraft(deps, lead, draft, ctx.inbound);
   }
 
   const qualification = { ...lead.qualification, ...decision.qualificationPatch };
@@ -187,7 +192,7 @@ async function commitDecision(
   }
   if (decision.flagForHuman) {
     await deps.repo.appendEvent({ leadId: lead.id, kind: 'hitl_requested', payload: { reason: 'borderline' } });
-    void notify({
+    void (deps.alert ?? notify)({
       kind: 'escalation',
       title: `Lead braucht einen Menschen (${decision.nextNode})`,
       detail: ctx.inbound ? `Er schrieb: "${ctx.inbound.slice(0, 300)}"` : undefined,
@@ -208,6 +213,26 @@ async function commitDecision(
   }
 
   return draft;
+}
+
+/**
+ * Put a draft in front of a human the moment it exists. Without this, drafts sat in the queue
+ * unseen until someone thought to query the API — some of them for two months.
+ */
+function announceDraft(deps: OrchestratorDeps, lead: LeadRecord, draft: MessageRecord, inbound?: string): void {
+  const who = lead.fullName ?? lead.firstName ?? 'Unbekannt';
+  const parts = [
+    inbound ? `${lead.firstName ?? 'Lead'} schrieb:\n„${inbound.slice(0, 400)}"` : 'Hat die Vernetzung angenommen.',
+    `Entwurf:\n„${draft.body}"`,
+  ];
+  if (draft.guardFlagged) parts.push('⚠️ Vom Sicherheitscheck markiert, bitte genau lesen.');
+  void (deps.alert ?? notify)({
+    kind: 'approval',
+    title: `Freigabe: ${who} (${draft.node ?? '?'})`,
+    detail: parts.join('\n\n'),
+    leadId: lead.id,
+    link: deps.reviewLink?.(draft.id),
+  });
 }
 
 /** First outbound to a lead (cold open / positive opener reply). */

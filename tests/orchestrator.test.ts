@@ -1,6 +1,7 @@
 import { InMemoryRepository } from '../src/store/memory.js';
 import { handleInbound, handleOpener, type OrchestratorDeps } from '../src/orchestrator.js';
 import type { FlowNode, InboundUnderstanding, LeadRecord } from '../src/brain/types.js';
+import type { Alert } from '../src/lib/notify.js';
 
 const VARS = (lead: LeadRecord) => ({
   firstName: lead.firstName ?? 'there',
@@ -105,5 +106,42 @@ describe('orchestrator end-to-end (in-memory)', () => {
     await handleOpener(deps, lead.id);
     const msgs = await repo.messagesForLead(lead.id);
     expect(msgs[0]?.status).toBe('approved');
+  });
+});
+
+describe('review notification', () => {
+  it('sends every draft that waits for approval to the review channel, with its link', async () => {
+    const repo = new InMemoryRepository();
+    const alerts: Alert[] = [];
+    const deps: OrchestratorDeps = {
+      ...makeDeps(repo),
+      alert: async (a) => void alerts.push(a),
+      reviewLink: (id) => `https://x/review/${id}`,
+    };
+    const lead = await repo.createLead({ source: 'cold_outbound', firstName: 'Max', fullName: 'Max Muster', linkedinUrl: 'u1' });
+
+    const opened = await handleOpener(deps, lead.id);
+    const replied = await handleInbound(deps, lead.id, 'yeah sure');
+
+    const reviews = alerts.filter((a) => a.kind === 'approval');
+    expect(reviews.map((a) => a.link)).toEqual([
+      `https://x/review/${opened.draft?.id}`,
+      `https://x/review/${replied.draft?.id}`,
+    ]);
+    expect(reviews[0].title).toContain('Max Muster');
+    expect(reviews[0].detail).toContain(opened.draft?.body.slice(0, 20));
+    // What they wrote is shown next to the answer.
+    expect(reviews[1].detail).toContain('yeah sure');
+  });
+
+  it('stays quiet when nothing waits for a human', async () => {
+    const repo = new InMemoryRepository();
+    const alerts: Alert[] = [];
+    const deps: OrchestratorDeps = { ...makeDeps(repo, false), alert: async (a) => void alerts.push(a), reviewLink: () => 'x' };
+    const lead = await repo.createLead({ source: 'cold_outbound', firstName: 'Max', linkedinUrl: 'u1' });
+
+    await handleOpener(deps, lead.id);
+
+    expect(alerts.filter((a) => a.kind === 'approval')).toEqual([]);
   });
 });

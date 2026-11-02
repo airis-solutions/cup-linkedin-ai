@@ -21,7 +21,9 @@ export type AlertKind =
   /** A draft tripped a compliance rule (return promise, price, prediction, advice). */
   | 'compliance'
   /** Something in the machinery failed and stayed failed. */
-  | 'system';
+  | 'system'
+  /** A draft waits for a human OK before it goes out. */
+  | 'approval';
 
 export interface Alert {
   kind: AlertKind;
@@ -32,28 +34,33 @@ export interface Alert {
   leadId?: string;
   /** Free-form extras for the receiving automation. */
   context?: Record<string, unknown>;
+  /** Where to act on it. Replaces the dashboard link at the end of the message. */
+  link?: string;
 }
 
 const ICON: Record<AlertKind, string> = {
   escalation: '🚨',
   compliance: '⚠️',
   system: '🔧',
+  approval: '✍️',
 };
 
 /** Fire an alert. Never throws, never blocks the caller on a slow endpoint. */
 export async function notify(alert: Alert, fetchImpl: typeof fetch = fetch): Promise<boolean> {
   // Always log, so the alert exists even when no channel is configured.
-  logger.warn({ ...alert }, `alert.${alert.kind}`);
+  // Without the link: a review link is a credential and has no business in the logs.
+  const { link, ...loggable } = alert;
+  logger.warn(loggable, `alert.${alert.kind}`);
 
   let url: string | undefined;
+  let dashboard: string;
   try {
-    url = loadEnv().ALERT_WEBHOOK_URL;
+    ({ ALERT_WEBHOOK_URL: url, PUBLIC_BASE_URL: dashboard } = loadEnv());
   } catch {
     return false; // env not loadable (e.g. in a test) — the log above is the fallback
   }
   if (!url) return false;
 
-  const dashboard = 'https://cup-linkedin-ai.vercel.app';
   const body = {
     kind: alert.kind,
     title: alert.title,
@@ -61,9 +68,11 @@ export async function notify(alert: Alert, fetchImpl: typeof fetch = fetch): Pro
     leadId: alert.leadId ?? null,
     context: alert.context ?? {},
     // A ready-made line, so a generic webhook needs no formatting logic downstream.
-    text: `${ICON[alert.kind]} ${alert.title}${alert.detail ? `\n${alert.detail}` : ''}${
-      alert.leadId ? `\nLead: ${alert.leadId}` : ''
-    }\n${dashboard}`,
+    text: link
+      ? `${ICON[alert.kind]} ${alert.title}${alert.detail ? `\n\n${alert.detail}` : ''}\n\n👉 Prüfen & senden: ${link}`
+      : `${ICON[alert.kind]} ${alert.title}${alert.detail ? `\n${alert.detail}` : ''}${
+          alert.leadId ? `\nLead: ${alert.leadId}` : ''
+        }\n${dashboard}`,
   };
 
   try {
