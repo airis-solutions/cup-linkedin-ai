@@ -52,6 +52,8 @@ const envSchema = z.object({
   INVITES_PER_RUN: z.coerce.number().int().positive().default(2),
   /** Ceiling on connection requests in any rolling 7 days, on top of the daily cap. */
   WEEKLY_INVITE_CAP: z.coerce.number().int().positive().default(40),
+  /** Unanswered connection requests older than this are withdrawn. */
+  INVITE_MAX_AGE_DAYS: z.coerce.number().int().positive().default(21),
   /** Sending window in SEND_TIMEZONE — nothing leaves outside it. */
   SEND_WINDOW_START_HOUR: z.coerce.number().int().min(0).max(23).default(9),
   SEND_WINDOW_END_HOUR: z.coerce.number().int().min(1).max(24).default(18),

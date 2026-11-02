@@ -1,5 +1,5 @@
 import { InMemoryRepository } from '../../src/store/memory.js';
-import { inSendWindow, localParts, runDailyCycle, defaultCycleOptions } from '../../src/handlers/daily-cycle.js';
+import { inSendWindow, localParts, runDailyCycle, defaultCycleOptions, withdrawStaleInvites } from '../../src/handlers/daily-cycle.js';
 import type { CycleDeps } from '../../src/handlers/daily-cycle.js';
 import type { LeadRecord } from '../../src/store/repository.js';
 import type { Alert } from '../../src/lib/notify.js';
@@ -310,5 +310,72 @@ describe('weekly invite cap', () => {
     const res = await runDailyCycle(makeDeps(repo, nextWeek, fake), { ...opts, now: () => nextWeek, weeklyInviteCap: 1 });
 
     expect(res.invited).toBe(1);
+  });
+});
+
+describe('withdrawing stale invites', () => {
+  const DAY = 86_400_000;
+
+  async function invitedLead(repo: InMemoryRepository, providerId: string, daysAgo: number, invitationId?: string) {
+    const lead = await queueColdLead(repo, providerId);
+    lead.stage = 'invited';
+    lead.invitedAt = new Date(TUESDAY_10.getTime() - daysAgo * DAY).toISOString();
+    lead.invitationId = invitationId;
+    await repo.saveLead(lead);
+    return lead;
+  }
+
+  function withdrawDeps(repo: InMemoryRepository, cancelled: string[], sent: { id: string; invitedUserId: string }[] = []) {
+    return {
+      repo,
+      unipile: {
+        cancelInvitation: async (id: string) => {
+          cancelled.push(id);
+          return { ok: true as const };
+        },
+        listSentInvitations: async () => ({ ok: true as const, items: sent }),
+      },
+    };
+  }
+
+  it('withdraws requests nobody accepted within 21 days and closes the lead', async () => {
+    const repo = new InMemoryRepository(() => TUESDAY_10);
+    const stale = await invitedLead(repo, 'p-stale', 22, 'inv-stale');
+    const fresh = await invitedLead(repo, 'p-fresh', 10, 'inv-fresh');
+    const cancelled: string[] = [];
+
+    const res = await withdrawStaleInvites(withdrawDeps(repo, cancelled), { now: () => TUESDAY_10, maxAgeDays: 21 });
+
+    expect(res.withdrawn).toBe(1);
+    expect(cancelled).toEqual(['inv-stale']);
+    expect((await repo.getLead(stale.id))?.stage).toBe('invite_expired');
+    expect((await repo.getLead(fresh.id))?.stage).toBe('invited');
+  });
+
+  it('finds the invitation id on Unipile for requests sent before ids were stored', async () => {
+    const repo = new InMemoryRepository(() => TUESDAY_10);
+    await invitedLead(repo, 'p-old', 30);
+    const cancelled: string[] = [];
+    const sent = [
+      { id: 'inv-robin-manual', invitedUserId: 'someone-robin-invited' },
+      { id: 'inv-old', invitedUserId: 'p-old' },
+    ];
+
+    await withdrawStaleInvites(withdrawDeps(repo, cancelled, sent), { now: () => TUESDAY_10, maxAgeDays: 21 });
+
+    // Only our own campaign request — never one Robin sent by hand.
+    expect(cancelled).toEqual(['inv-old']);
+  });
+
+  it('leaves the lead as invited when Unipile refuses the withdrawal', async () => {
+    const repo = new InMemoryRepository(() => TUESDAY_10);
+    const lead = await invitedLead(repo, 'p-stale', 22, 'inv-stale');
+    const deps = withdrawDeps(repo, []);
+    deps.unipile.cancelInvitation = async () => ({ ok: false as const, error: 'Unipile 500' }) as never;
+
+    const res = await withdrawStaleInvites(deps, { now: () => TUESDAY_10, maxAgeDays: 21 });
+
+    expect(res.withdrawn).toBe(0);
+    expect((await repo.getLead(lead.id))?.stage).toBe('invited');
   });
 });

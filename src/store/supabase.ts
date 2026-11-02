@@ -230,6 +230,18 @@ export class SupabaseRepository implements Repository {
     return (data ?? []).map(rowToLead);
   }
 
+  async listInvitedBefore(beforeIso: string, limit: number): Promise<LeadRecord[]> {
+    const { data, error } = await this.sb
+      .from('leads')
+      .select('*')
+      .eq('stage', 'invited')
+      .lt('invited_at', beforeIso)
+      .order('invited_at', { ascending: true })
+      .limit(limit);
+    if (error) throw new Error(`listInvitedBefore: ${error.message}`);
+    return (data ?? []).map(rowToLead);
+  }
+
   async listDueForFollowUp(nowIso: string, limit: number): Promise<LeadRecord[]> {
     const { data, error } = await this.sb
       .from('leads')

@@ -51,6 +51,7 @@ const STAGE_ORDER: { stage: FunnelStage; label: string }[] = [
   { stage: 'new', label: 'In der Warteschlange' },
   { stage: 'invited', label: 'Anfrage raus' },
   { stage: 'invite_failed', label: 'Anfrage gescheitert' },
+  { stage: 'invite_expired', label: 'Anfrage zurückgezogen' },
   { stage: 'opener_sent', label: 'Angenommen, angeschrieben' },
   { stage: 'qualifying', label: 'Im Gespräch' },
   { stage: 'qualified', label: 'Qualifiziert' },

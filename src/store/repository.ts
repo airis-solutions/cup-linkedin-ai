@@ -26,6 +26,7 @@ export type EventKind =
   | 'opener_sent'
   | 'invite_sent'
   | 'invite_failed'
+  | 'invite_withdrawn'
   | 'compliance_blocked'
   | 'booking_confirmed';
 
@@ -121,6 +122,8 @@ export interface Repository {
   // ── Daily cycle ────────────────────────────────────────────────
   /** Cold leads imported but not yet invited — fewest failed attempts first, then oldest. */
   listQueuedForInvite(limit: number): Promise<LeadRecord[]>;
+  /** Leads whose connection request went out before `beforeIso` and is still unanswered. */
+  listInvitedBefore(beforeIso: string, limit: number): Promise<LeadRecord[]>;
   /** Leads whose follow-up clock has come due. */
   listDueForFollowUp(nowIso: string, limit: number): Promise<LeadRecord[]>;
   /** Approved outbound messages that have not been dispatched yet. */

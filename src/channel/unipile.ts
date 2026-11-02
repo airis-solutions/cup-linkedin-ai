@@ -8,6 +8,8 @@
  *   first DM    -> POST /chats                       (account_id, attendees_ids, text)
  *   resolve     -> GET  /users/{identifier}          (public identifier -> provider_id)
  *   invite      -> POST /users/invite                (account_id, provider_id) [Trigger A]
+ *   sent invites-> GET  /users/invite/sent           (account_id, cursor) -> pending requests
+ *   withdraw    -> DELETE /users/invite/sent/{id}    (account_id)
  *   search      -> POST /linkedin/search             (people search -> list building)
  *   filter ids  -> GET  /linkedin/search/parameters  ("Switzerland" -> 106693272)
  *
@@ -78,6 +80,13 @@ export interface SearchPageResult {
   /** Pass back into the next call to page on. Absent once the results run out. */
   cursor?: string;
   error?: string;
+}
+
+/** A connection request still waiting for an answer. */
+export interface SentInvitation {
+  id: string;
+  /** Provider id of the person invited — matches `LeadRecord.linkedinProviderId`. */
+  invitedUserId: string;
 }
 
 /** One resolved filter value, e.g. { id: "106693272", title: "Switzerland" }. */
@@ -184,6 +193,43 @@ export class UnipileClient {
       if (!res.ok) return { ok: false, error: `Unipile ${res.status}: ${(await res.text()).slice(0, 200)}` };
       const d = (await res.json()) as { invitation_id?: string; id?: string };
       return { ok: true, id: d.invitation_id ?? d.id };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /** Pending connection requests sent from the account, newest first. */
+  async listSentInvitations(
+    opts: { cursor?: string; limit?: number } = {},
+  ): Promise<{ ok: boolean; items: SentInvitation[]; cursor?: string; error?: string }> {
+    const qs = new URLSearchParams({ account_id: this.cfg.accountId, limit: String(opts.limit ?? 100) });
+    if (opts.cursor) qs.set('cursor', opts.cursor);
+    try {
+      const res = await this.fetch(this.url(`/users/invite/sent?${qs.toString()}`), {
+        method: 'GET',
+        headers: this.headers(),
+      });
+      if (!res.ok) return { ok: false, items: [], error: `Unipile ${res.status}: ${(await res.text()).slice(0, 200)}` };
+      const d = (await res.json()) as { items?: { id?: string; invited_user_id?: string }[]; cursor?: string };
+      const items = (d.items ?? [])
+        .filter((i): i is { id: string; invited_user_id: string } => Boolean(i.id && i.invited_user_id))
+        .map((i) => ({ id: i.id, invitedUserId: i.invited_user_id }));
+      return { ok: true, items, cursor: d.cursor || undefined };
+    } catch (e) {
+      return { ok: false, items: [], error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /** Withdraw a pending connection request. */
+  async cancelInvitation(invitationId: string): Promise<SendResult> {
+    const qs = `?account_id=${encodeURIComponent(this.cfg.accountId)}`;
+    try {
+      const res = await this.fetch(this.url(`/users/invite/sent/${encodeURIComponent(invitationId)}${qs}`), {
+        method: 'DELETE',
+        headers: this.headers(),
+      });
+      if (!res.ok) return { ok: false, error: `Unipile ${res.status}: ${(await res.text()).slice(0, 200)}` };
+      return { ok: true, id: invitationId };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }

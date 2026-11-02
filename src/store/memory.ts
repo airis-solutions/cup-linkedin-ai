@@ -117,6 +117,13 @@ export class InMemoryRepository implements Repository {
       .slice(0, limit);
   }
 
+  async listInvitedBefore(beforeIso: string, limit: number): Promise<LeadRecord[]> {
+    return [...this.leads.values()]
+      .filter((l) => l.stage === 'invited' && l.invitedAt && l.invitedAt < beforeIso)
+      .sort((a, b) => (a.invitedAt ?? '').localeCompare(b.invitedAt ?? ''))
+      .slice(0, limit);
+  }
+
   async listDueForFollowUp(nowIso: string, limit: number): Promise<LeadRecord[]> {
     return [...this.leads.values()]
       .filter((l) => !l.doNotContact && l.nextActionAt && l.nextActionAt <= nowIso)

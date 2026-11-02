@@ -242,6 +242,65 @@ export async function runDailyCycle(deps: CycleDeps, options: Partial<CycleOptio
   return result;
 }
 
+export interface WithdrawDeps {
+  repo: Repository;
+  unipile: Pick<UnipileClient, 'cancelInvitation' | 'listSentInvitations'>;
+}
+
+export interface WithdrawOptions {
+  now: () => Date;
+  /** Requests older than this are withdrawn. */
+  maxAgeDays: number;
+  /** Most withdrawals per run. Default 10. */
+  limit?: number;
+}
+
+/**
+ * Withdraw connection requests nobody accepted within `maxAgeDays`.
+ *
+ * A long tail of pending requests is one of the things LinkedIn reads as spam, and a request
+ * unanswered for three weeks is not going to be. Only leads we invited are touched, never
+ * requests Robin sent himself. Leads invited before invitation ids were stored are matched
+ * against Unipile's list of sent requests by provider id.
+ */
+export async function withdrawStaleInvites(
+  deps: WithdrawDeps,
+  opts: WithdrawOptions,
+): Promise<{ withdrawn: number; failed: number }> {
+  const cutoff = new Date(opts.now().getTime() - opts.maxAgeDays * 86_400_000).toISOString();
+  const stale = await deps.repo.listInvitedBefore(cutoff, opts.limit ?? 10);
+  const result = { withdrawn: 0, failed: 0 };
+  if (stale.length === 0) return result;
+
+  // One page of sent requests is enough to cover the handful of leads without a stored id.
+  let sentByUser: Map<string, string> | undefined;
+  const invitationIdFor = async (lead: LeadRecord): Promise<string | undefined> => {
+    if (lead.invitationId) return lead.invitationId;
+    if (!sentByUser) {
+      const page = await deps.unipile.listSentInvitations({ limit: 100 });
+      sentByUser = new Map(page.items.map((i) => [i.invitedUserId, i.id]));
+    }
+    return lead.linkedinProviderId ? sentByUser.get(lead.linkedinProviderId) : undefined;
+  };
+
+  for (const lead of stale) {
+    const invitationId = await invitationIdFor(lead);
+    const res = invitationId
+      ? await deps.unipile.cancelInvitation(invitationId)
+      : { ok: false as const, error: 'invitation not found on Unipile' };
+    if (!res.ok) {
+      result.failed += 1;
+      logger.warn({ leadId: lead.id, error: res.error }, 'cycle.withdraw_failed');
+      continue;
+    }
+    lead.stage = 'invite_expired';
+    await deps.repo.saveLead(lead);
+    await deps.repo.appendEvent({ leadId: lead.id, kind: 'invite_withdrawn', payload: { invitationId } });
+    result.withdrawn += 1;
+  }
+  return result;
+}
+
 /** Schedule the next follow-up touch for a lead (called after an outbound actually goes out). */
 export function scheduleNextTouch(lead: LeadRecord, hours: number, now: Date): void {
   lead.lastOutboundAt = now.toISOString();

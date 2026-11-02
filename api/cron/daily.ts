@@ -5,7 +5,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { appDeps } from '../_app.js';
-import { runDailyCycle } from '../../src/handlers/daily-cycle.js';
+import { runDailyCycle, withdrawStaleInvites } from '../../src/handlers/daily-cycle.js';
 import { loadEnv } from '../../src/config/env.js';
 
 export default async (req: VercelRequest, res: VercelResponse): Promise<void> => {
@@ -26,7 +26,8 @@ export default async (req: VercelRequest, res: VercelResponse): Promise<void> =>
       return;
     }
 
-    const result = await runDailyCycle(appDeps(), {
+    const deps = appDeps();
+    const result = await runDailyCycle(deps, {
       dailyCap: env.DAILY_ACTION_CAP,
       invitesPerRun: env.INVITES_PER_RUN,
       weeklyInviteCap: env.WEEKLY_INVITE_CAP,
@@ -37,7 +38,16 @@ export default async (req: VercelRequest, res: VercelResponse): Promise<void> =>
       followUpHours: env.FOLLOWUP_HOURS,
     });
 
-    res.status(200).json(result);
+    // Only when the cycle actually ran: same window, same pause switch.
+    const withdrawn =
+      result.ran && deps.unipile
+        ? await withdrawStaleInvites(
+            { repo: deps.repo, unipile: deps.unipile },
+            { now: () => new Date(), maxAgeDays: env.INVITE_MAX_AGE_DAYS },
+          )
+        : null;
+
+    res.status(200).json({ ...result, withdrawn });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
