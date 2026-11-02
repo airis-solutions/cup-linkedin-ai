@@ -18,6 +18,9 @@ const OPTIONAL = [
   'GHL_LOCATION_ID',
   // Without this, escalations and compliance hits are only logged, never delivered.
   'ALERT_WEBHOOK_URL',
+  // Without these the webhook and approval routes are open to anyone / closed to everyone.
+  'WEBHOOK_SHARED_SECRET',
+  'DASHBOARD_TOKEN',
 ] as const;
 
 const present = (k: string): boolean => Boolean(process.env[k] && process.env[k] !== '');
