@@ -19,8 +19,10 @@ export async function handleUnipileWebhook(
   if (fromSelf || !senderId || !text.trim()) return null;
 
   // Dedupe: Unipile redelivers a webhook if our reply (a slow Opus call) doesn't ack in time,
-  // which would process the same message twice. Skip if we've already recorded this message id.
-  if (messageId && (await deps.repo.findInboundByUnipileId(messageId))) return null;
+  // which would process the same message twice. Skip if we've already recorded this message
+  // id — unless that attempt crashed, in which case the redelivery is our second chance.
+  const seen = messageId ? await deps.repo.findInboundByUnipileId(messageId) : null;
+  if (seen && seen.status !== 'failed') return null;
 
   const firstName = firstNameOf(senderName);
 
@@ -51,5 +53,5 @@ export async function handleUnipileWebhook(
     if (dirty) await deps.repo.saveLead(lead);
   }
 
-  return handleInbound(deps, lead.id, text, messageId);
+  return handleInbound(deps, lead.id, text, messageId, seen?.id);
 }

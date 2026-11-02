@@ -88,7 +88,7 @@ function nextCounters(prev: BrainState, nextNode: BrainState['node']): Pick<
 async function loadHistory(repo: Repository, leadId: string): Promise<GenerateTurn[]> {
   const msgs = await repo.messagesForLead(leadId);
   return msgs
-    .filter((m) => m.direction === 'inbound' || m.status === 'sent')
+    .filter((m) => (m.direction === 'inbound' && m.status !== 'failed') || m.status === 'sent')
     .map((m) => ({ direction: m.direction, body: m.body }));
 }
 
@@ -222,12 +222,19 @@ export async function handleOpener(deps: OrchestratorDeps, leadId: string): Prom
   return { draft, leadId, node: decision.nextNode };
 }
 
-/** Process one inbound message from the lead. */
+/**
+ * Process one inbound message from the lead.
+ *
+ * `retryOf` is the id of this same message from an earlier attempt that crashed: it is reused
+ * rather than recorded twice. If this attempt crashes too, the message is marked failed so the
+ * next webhook redelivery gets another go instead of being dropped as a duplicate.
+ */
 export async function handleInbound(
   deps: OrchestratorDeps,
   leadId: string,
   inboundText: string,
   unipileMessageId?: string,
+  retryOf?: string,
 ): Promise<TurnResult> {
   const lead = await deps.repo.getLead(leadId);
   if (!lead) throw new Error(`lead not found: ${leadId}`);
@@ -235,9 +242,37 @@ export async function handleInbound(
   // History BEFORE recording the new inbound (it is passed separately as ctx.inbound).
   const history = await loadHistory(deps.repo, leadId);
 
-  await deps.repo.appendMessage({ leadId, direction: 'inbound', status: 'received', body: inboundText, unipileMessageId });
-  await deps.repo.appendEvent({ leadId, kind: 'reply_received', payload: { node: lead.brain.node } });
+  let inboundId: string;
+  if (retryOf) {
+    inboundId = retryOf;
+    await deps.repo.setMessageStatus(retryOf, 'received');
+  } else {
+    const inbound = await deps.repo.appendMessage({
+      leadId,
+      direction: 'inbound',
+      status: 'received',
+      body: inboundText,
+      unipileMessageId,
+    });
+    inboundId = inbound.id;
+    await deps.repo.appendEvent({ leadId, kind: 'reply_received', payload: { node: lead.brain.node } });
+  }
 
+  try {
+    return await answerInbound(deps, lead, inboundText, history);
+  } catch (err) {
+    await deps.repo.setMessageStatus(inboundId, 'failed');
+    throw err;
+  }
+}
+
+async function answerInbound(
+  deps: OrchestratorDeps,
+  lead: LeadRecord,
+  inboundText: string,
+  history: GenerateTurn[],
+): Promise<TurnResult> {
+  const leadId = lead.id;
   const understanding = await deps.classify({ node: lead.brain.node, inboundText });
   const language: Language = understanding.language ?? lead.brain.language ?? 'en';
 
