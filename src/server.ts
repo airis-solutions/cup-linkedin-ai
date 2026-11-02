@@ -8,8 +8,12 @@
  * - POST /webhooks/ghl      — GHL fires when a prospect books a slot; we mark the lead booked
  *                              and stop follow-ups.
  * - GET  /pending           — list messages awaiting approval (the HITL queue).
- * - POST /approve           — approve a draft and send it via Unipile.
+ * - POST /approve           — approve a draft; sends it now if the send gate allows, else the
+ *                              next cycle run does.
  * - POST /reject            — discard a draft.
+ *
+ * The three approval routes need DASHBOARD_TOKEN: they expose prospects' conversations and can
+ * send from Robin's account. They fail closed when no token is configured.
  * - GET  /health            — liveness.
  *
  * `route()` is pure ({method, path, body} -> {status, json}) so it's unit-testable; the
@@ -35,7 +39,16 @@ export interface AppDeps extends OrchestratorDeps {
   unipile: UnipileClient | null;
   /** Optional shared secret; if set, /webhooks/unipile must present it. */
   webhookSecret?: string;
+  /** Required for the approval routes. Unset = those routes are closed. */
+  dashboardToken?: string;
+  /**
+   * Decides whether an approved message may go out right now: inside the sending window and
+   * with a unit of today's budget reserved. Unset = never send on approve, leave it to the cycle.
+   */
+  sendGate?: () => Promise<boolean>;
 }
+
+const APPROVAL_ROUTES = new Set(['GET /pending', 'POST /approve', 'POST /reject']);
 
 export interface RouteRequest {
   method: string;
@@ -83,6 +96,11 @@ export async function route(deps: AppDeps, req: RouteRequest): Promise<RouteResp
     return { status: 200, json: { ok: true, booking: result } };
   }
 
+  if (APPROVAL_ROUTES.has(`${method} ${path}`)) {
+    if (!deps.dashboardToken) return { status: 503, json: { error: 'approvals not configured (set DASHBOARD_TOKEN)' } };
+    if (req.headers['x-dashboard-token'] !== deps.dashboardToken) return { status: 401, json: { error: 'unauthorized' } };
+  }
+
   if (method === 'GET' && path === '/pending') {
     return { status: 200, json: await deps.repo.pendingApprovals() };
   }
@@ -92,8 +110,10 @@ export async function route(deps: AppDeps, req: RouteRequest): Promise<RouteResp
     const leadId = String(req.body.leadId ?? '');
     if (!messageId) return { status: 400, json: { error: 'messageId required' } };
     await approveMessage(deps.repo, messageId);
+    // Approving at 23:00 must not send at 23:00: outside the window or without budget the
+    // message stays approved and the next cycle run sends it.
     let dispatched = null;
-    if (deps.unipile && leadId) {
+    if (deps.unipile && leadId && deps.sendGate && (await deps.sendGate())) {
       dispatched = await dispatchApprovedForLead({ repo: deps.repo, unipile: deps.unipile }, leadId);
     }
     return { status: 200, json: { ok: true, dispatched } };

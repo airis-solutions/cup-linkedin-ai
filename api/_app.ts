@@ -8,6 +8,7 @@ import { createSupabaseRepoFromEnv } from '../src/store/supabase.js';
 import { createUnipileFromEnv } from '../src/channel/index.js';
 import { createGhlFromEnv } from '../src/channel/ghl.js';
 import { loadEnv } from '../src/config/env.js';
+import { inSendWindow, localParts, defaultCycleOptions } from '../src/handlers/daily-cycle.js';
 import type { LeadRecord } from '../src/store/repository.js';
 
 const BOOKING_LINK = 'https://www.crypto-gameplan.com/booking';
@@ -22,8 +23,15 @@ export function appDeps(): AppDeps {
 function deps(): AppDeps {
   if (cached) return cached;
   const env = loadEnv();
+  const repo = createSupabaseRepoFromEnv();
+  const window = defaultCycleOptions({
+    windowStartHour: env.SEND_WINDOW_START_HOUR,
+    windowEndHour: env.SEND_WINDOW_END_HOUR,
+    timezone: env.SEND_TIMEZONE,
+    includeWeekends: env.SEND_ON_WEEKENDS,
+  });
   cached = {
-    repo: createSupabaseRepoFromEnv(),
+    repo,
     classify: classifyInbound,
     generate: generateReply,
     hitlRequired: env.HITL_REQUIRED_BEFORE_SEND,
@@ -35,6 +43,13 @@ function deps(): AppDeps {
     unipile: createUnipileFromEnv(),
     ghl: createGhlFromEnv(),
     webhookSecret: env.WEBHOOK_SHARED_SECRET,
+    dashboardToken: env.DASHBOARD_TOKEN,
+    // Same rules as the cycle: inside the window, and one unit of the shared daily budget.
+    sendGate: async () => {
+      if (env.PAUSE_OUTBOUND || !inSendWindow(window)) return false;
+      const { day } = localParts(window.now(), window.timezone);
+      return (await repo.reserveDailySends(day, env.DAILY_ACTION_CAP, 1)) > 0;
+    },
     followUpHours: env.FOLLOWUP_HOURS,
   };
   return cached;

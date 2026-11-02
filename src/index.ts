@@ -39,6 +39,8 @@ async function main(): Promise<void> {
     unipile,
     ghl: createGhlFromEnv(),
     webhookSecret: env.WEBHOOK_SHARED_SECRET,
+    dashboardToken: env.DASHBOARD_TOKEN,
+    // No sendGate locally: approving only marks the draft, nothing leaves from a dev machine.
   };
 
   const port = Number(process.env.PORT ?? 3000);
