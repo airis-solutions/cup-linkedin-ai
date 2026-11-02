@@ -66,6 +66,14 @@ export interface SearchLeadsOptions {
   target: number;
   /** Safety bound so a bad filter can't page forever. Default 20. */
   maxPages?: number;
+  /** Continue a search where an earlier run stopped (a cursor from `nextCursor`). */
+  startCursor?: string;
+  /**
+   * Keep the rest of a page after the target is met. Needed when the search is resumed later
+   * from `nextCursor`: that cursor points at the NEXT page, so anything left on this one would
+   * never be seen again.
+   */
+  finishPage?: boolean;
   /** Results per request. Default 50. */
   pageSize?: number;
   /** Rules that disqualify a profile, matched on name + headline. Pass [] to keep everything. */
@@ -88,6 +96,10 @@ export interface SearchLeadsResult {
   pages: number;
   /** True when we stopped on the page bound or ran out of results before hitting `target`. */
   short: boolean;
+  /** Where to continue next time. Absent once the search has no more pages. */
+  nextCursor?: string;
+  /** LinkedIn has no further results for these filters. */
+  exhausted: boolean;
   error?: string;
 }
 
@@ -120,10 +132,12 @@ export async function searchLeads(
     unusable: 0,
     pages: 0,
     short: false,
+    exhausted: false,
   };
 
   const seen = new Set<string>();
-  let cursor: string | undefined;
+  let cursor: string | undefined = opts.startCursor;
+  result.nextCursor = cursor;
 
   while (result.candidates.length < opts.target && result.pages < maxPages) {
     const page = await deps.unipile.searchPeople(opts.filters, { cursor, limit: pageSize });
@@ -136,7 +150,7 @@ export async function searchLeads(
     }
 
     for (const p of page.items) {
-      if (result.candidates.length >= opts.target) break;
+      if (result.candidates.length >= opts.target && !opts.finishPage) break;
       result.scanned += 1;
 
       const linkedinUrl = profileUrlOf(p);
@@ -168,8 +182,13 @@ export async function searchLeads(
       });
     }
 
-    if (!page.cursor || page.items.length === 0) break; // results exhausted
+    if (!page.cursor || page.items.length === 0) {
+      result.exhausted = true;
+      result.nextCursor = undefined;
+      break;
+    }
     cursor = page.cursor;
+    result.nextCursor = cursor;
 
     if (result.candidates.length < opts.target) {
       const pause = opts.delayMs?.() ?? 0;

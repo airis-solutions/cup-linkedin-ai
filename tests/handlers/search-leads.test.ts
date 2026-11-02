@@ -224,3 +224,38 @@ describe('searchLeads', () => {
     expect(DEFAULT_EXCLUSIONS.length).toBeGreaterThan(0);
   });
 });
+
+describe('searchLeads — resuming a campaign', () => {
+  it('starts from a saved cursor and hands back where to continue', async () => {
+    const unipile = fakeUnipile([[profile(1)], [profile(2)], [profile(3)]]);
+    const res = await searchLeads(
+      { repo: fakeRepo(), unipile },
+      { filters: {}, target: 1, startCursor: '1', ...noSleep },
+    );
+
+    expect(unipile.calls[0].cursor).toBe('1');
+    expect(res.candidates.map((c) => c.providerId)).toEqual(['ACo2']);
+    expect(res.nextCursor).toBe('2');
+    expect(res.exhausted).toBe(false);
+  });
+
+  it('reports a search as exhausted once LinkedIn has no more pages', async () => {
+    const unipile = fakeUnipile([[profile(1)]]);
+    const res = await searchLeads({ repo: fakeRepo(), unipile }, { filters: {}, target: 10, ...noSleep });
+
+    expect(res.exhausted).toBe(true);
+    expect(res.nextCursor).toBeUndefined();
+  });
+
+  it('with finishPage, keeps the rest of the page instead of dropping it', async () => {
+    const unipile = fakeUnipile([[profile(1), profile(2), profile(3)], [profile(4)]]);
+    const res = await searchLeads(
+      { repo: fakeRepo(), unipile },
+      { filters: {}, target: 1, finishPage: true, ...noSleep },
+    );
+
+    // The next run resumes on page 2, so page 1 must be used up now.
+    expect(res.candidates).toHaveLength(3);
+    expect(res.nextCursor).toBe('1');
+  });
+});
